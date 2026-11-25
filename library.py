@@ -114,7 +114,7 @@ def save_progress(db, owner, entry):
     return dict(fileId=file,status=status,progress=row)
 
 
-def migrate_positions(lib,db,previous,file,book,info):
+def migrate_positions(lib,db,previous,file,book,info,disc_prefix=None):
     """Keep the latest per-profile position when the source editions become one."""
     sections=info["sections"]
     timeline=[];total=0
@@ -130,8 +130,19 @@ def migrate_positions(lib,db,previous,file,book,info):
         e=db.execute("SELECT book,folder FROM editions WHERE id=?",(edition,)).fetchone()
         old=json.loads((lib.data/"editions"/e["folder"]/"index.json").read_text(encoding="utf8"))["sections"]
         paths={s["path"]:i for i,s in enumerate(sections)}
+        if disc_prefix is not None:
+            labels={s["name"]:i for i,s in enumerate(sections)}
+            prefix=disc_prefix+"/" if disc_prefix else ""
+            targets=[labels.get(prefix+s["name"]) for s in old]
+            old_starts=[0.0]
+            new_starts=[0.0]
+            for items,starts in ((old,old_starts),(sections,new_starts)):
+                for s in items:
+                    starts.append(starts[-1]+sum(c["end"]-c["begin"] for c in s["cues"]))
         def chapter_for(index):
             i=max(0,min(int(index),len(old)-1))
+            if disc_prefix is not None and targets[i] is not None:
+                return targets[i]
             return paths.get(old[i]["path"],min(i,len(sections)-1))
         for owner,data in db.execute("SELECT owner,data FROM progress WHERE edition=?",(edition,)).fetchall():
             row=json.loads(data)
@@ -140,15 +151,30 @@ def migrate_positions(lib,db,previous,file,book,info):
             narration=row["narration"];txt=row["text"]
             if timeline and narration.get("updatedAt"):
                 seconds=narration.get("seconds")
+                if disc_prefix is not None:
+                    import bisect
+                    if not isinstance(seconds,(int,float)):
+                        seconds=old_starts[-1]*(narration.get("percentage") or row["percentage"])/100
+                    old_i=max(0,min(len(old)-1,bisect.bisect_right(old_starts,seconds)-1))
+                    new_i=chapter_for(old_i)
+                    seconds=new_starts[new_i]+max(0,min(seconds-old_starts[old_i],new_starts[new_i+1]-new_starts[new_i]))
+                    narration["percentage"]=seconds*100/total
+                    if narration["updatedAt"]>=(txt.get("updatedAt") or ""):row["percentage"]=narration["percentage"]
                 seconds=max(0,min(total,float(seconds))) if isinstance(seconds,(int,float)) else total*row["percentage"]/100
                 _,i,anchor=audio_at(seconds)
                 narration.update(seconds=seconds,fragment=anchor,sectionIndex=i)
             if txt.get("page"):
                 txt["page"]=chapter_for(txt["page"]-1)+1
+                if disc_prefix is not None:
+                    txt["cfi"]=None
+                    if (txt.get("updatedAt") or "")>(narration.get("updatedAt") or ""):
+                        row["percentage"]=100*(txt["page"]-1)/len(sections)
             db.execute("INSERT OR REPLACE INTO progress VALUES(?,?,?)",(owner,file,json.dumps(row)))
         for mark in db.execute("SELECT * FROM bookmarks WHERE edition=?",(edition,)).fetchall():
             index=chapter_for(mark["chapter"]);cue=-1;offset=mark["offset"]
-            if timeline and mark["cue"]>=0 and 0<=mark["chapter"]<len(old):
+            if disc_prefix is not None:
+                cue=mark["cue"]
+            elif timeline and mark["cue"]>=0 and 0<=mark["chapter"]<len(old):
                 seconds=sum(c["end"]-c["begin"] for s in old[:mark["chapter"]] for c in s["cues"])
                 seconds+=sum(c["end"]-c["begin"] for c in old[mark["chapter"]]["cues"][:mark["cue"]])
                 _,index,anchor=audio_at(seconds)
@@ -269,7 +295,7 @@ class Library:
             raise KeyError("Ausgabe unbekannt.")
         return row, self.data/"editions"/row["folder"]
 
-    def publish(self,folder,book,category,info,job=None,podcast=None,scan=None,originals=None):
+    def publish(self,folder,book,category,info,job=None,podcast=None,scan=None,originals=None,discs=None):
         with self.db() as db:
             db.execute("BEGIN IMMEDIATE")
             last_edition=None
@@ -315,7 +341,16 @@ class Library:
             if podcast:
                 db.execute("DELETE FROM podcast_building WHERE folder=?",(folder.name,))
             if last_edition:
-                migrate_positions(self,db,(last_edition,),file,book,info)
+                migrate_positions(self,db,(last_edition,),file,book,info,disc_prefix="" if discs else None)
+            for source,name in (discs or {}).items():
+                old=db.execute("""SELECT b.* FROM scanned_media s JOIN books b ON b.id=s.book
+                    WHERE s.source=? AND b.category='audio' AND b.merged_into IS NULL""",(source,)).fetchone()
+                if old and old["id"]!=book:
+                    if db.execute("""SELECT 1 FROM jobs WHERE (book=? OR companion=?) AND state IN ('running','waiting')""",
+                                  (old["id"],old["id"])).fetchone():
+                        raise InterruptedError("Ein Auftrag verwendet diese CD.")
+                    migrate_positions(self,db,(old["edition"],),file,book,info,disc_prefix=name)
+                    db.execute("UPDATE books SET merged_into=? WHERE id=?",(book,old["id"]))
             if scan:
                 db.execute("INSERT OR REPLACE INTO scanned_media(source,signature,book,source_tags) VALUES(?,?,?,?)",(*scan,book,json.dumps(incoming)))
             if job:
@@ -365,7 +400,8 @@ class Library:
                 kind="audilege"
             info["metadata"].update(fields)
             if verify:verify()
-            return self.publish(folder,None,kind,info,podcast=podcast,scan=scan)
+            discs={os.path.normcase(str(p.parent)):p.parent.name for p,label in tracks if "/" in label} if scan and kind=="audio" else {}
+            return self.publish(folder,None,kind,info,podcast=podcast,scan=scan,discs=discs)
         except Exception:
             shutil.rmtree(folder)
             if podcast:

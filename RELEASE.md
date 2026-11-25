@@ -1,10 +1,9 @@
 ## Deutsch
 
-- Vorhandene Hörbuch- und EPUB-Ordner direkt und schreibgeschützt einbinden. Neue Dateien werden automatisch erkannt. Beim normalen Hören bleiben die Audiodateien an ihrem Speicherort.
-- Anmeldung, Cover, Lesen und Audiowiedergabe funktionieren auch unter einem verschachtelten Proxy-Unterpfad. Die Weboberfläche lädt ihre Skripte gemeinsam. Anmeldeformulare verwenden POST.
-- Audiobookshelf-Importe und Audilege-Sitzungen aus Web und App erscheinen je Profil in einer Statistik mit aktueller und längster Aktivitätsserie. Audilege für Android 0.4.20 unterstützt die gemeinsame Titelansicht.
-- Zum Aktualisieren den Dienst anhalten, Daten sichern, Programmdateien austauschen und den bisherigen Dienst mit denselben Argumenten starten.
+Ein Hörbuch mit CD-Unterordnern erscheint als ein Titel im Regal. Der Scanner erkennt Ordner wie CD 1, CD02, Disc 3 und Disk 10 und sortiert die Tracks innerhalb jeder CD numerisch. Beim erneuten Scan ordnet Audilege frühere CD-Einträge dem gemeinsamen Buch zu und übernimmt Hörpositionen und Lesezeichen je Profil. Bände in eigenen Titelordnern bleiben einzeln auffindbar.
+
+Zum Aktualisieren den bisherigen Dienst anhalten, den Datenordner sichern, die Programmdateien austauschen und den Dienst wie bisher starten. Der automatische Scan übernimmt die Zuordnung. Die Dateien in der eingebundenen Sammlung bleiben an ihrem Speicherort.
 
 ## English
 
-Link existing media folders without copying the collection. The web application works at the site root and behind a prefix-stripping reverse proxy. Imported Audiobookshelf sessions and Audilege activity share a per-profile history with current and best streaks. Android 0.4.20 supports the merged per-title summaries. Back up the data directory and restart the updated program with the same task or service.
+Audiobooks with numbered disc folders appear as a single title in disc and track order. On rescan, earlier disc entries are consolidated and listening positions and bookmarks are mapped to the combined book for each profile. Back up your data and restart the existing service with the updated program files.

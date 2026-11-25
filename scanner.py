@@ -13,11 +13,12 @@ from datetime import datetime
 from library import AUDIO
 
 
-def fingerprint(paths):
+def fingerprint(paths, base=None):
     digest=hashlib.sha256()
     for path in paths:
         info=path.stat()
-        digest.update(os.fsencode(path.name)+b"\0"+f"{info.st_size}:{info.st_mtime_ns};".encode())
+        name=path.relative_to(base) if base else path.name
+        digest.update(os.fsencode(name)+b"\0"+f"{info.st_size}:{info.st_mtime_ns};".encode())
     return digest.hexdigest()
 
 
@@ -26,20 +27,40 @@ def real_entry(path):
     return not (stat.S_ISLNK(info.st_mode) or getattr(info,"st_file_attributes",0)&stat.FILE_ATTRIBUTE_REPARSE_POINT)
 
 
+DISC = re.compile(r"(?:cd|dis[ck])\s*[-_. ]*\d+(?:\s*(?:von|of)\s*\d+)?", re.I)
+
+
+def natural(value):
+    return [(1,int(v)) if v.isdigit() else (0,v.casefold()) for v in re.split(r"(\d+)",value)]
+
+
+def audio_files(paths):
+    return sorted((p for p in paths if p.suffix.lower() in AUDIO),key=lambda p:natural(p.name))
+
+
 def groups(root):
+    grouped_discs=set()
     for folder,dirs,files in os.walk(root):
         parent=Path(folder)
         dirs[:]=[n for n in dirs if not n.startswith(".") and real_entry(parent/n)]
         files=[parent/n for n in files if not n.startswith((".","~")) and real_entry(parent/n)]
         for path in sorted(p for p in files if p.suffix.lower()==".epub"):
             yield "ebook",path,[path]
-        audio=sorted((p for p in files if p.suffix.lower() in AUDIO),
-                     key=lambda p:[(1,int(v)) if v.isdigit() else (0,v.casefold()) for v in re.split(r"(\d+)",p.name)])
+        if parent in grouped_discs:
+            grouped_discs.remove(parent)
+            continue
+        audio=audio_files(files)
         podcasts=any(p.casefold()=="podcasts" for p in parent.relative_to(root).parts)
         if parent==root or parent==root/"Audiobooks" or podcasts:
             for p in audio:yield "podcast" if podcasts else "audio",p,[p]
-        elif audio:
-            yield "audio",parent,audio
+        else:
+            for name in sorted((n for n in dirs if DISC.fullmatch(n)),key=natural):
+                disc=parent/name
+                tracks=audio_files(p for p in disc.iterdir() if not p.name.startswith((".","~"))
+                                   and real_entry(p) and p.is_file())
+                audio.extend(tracks)
+                grouped_discs.add(disc)
+            if audio:yield "audio",parent,audio
 
 
 class Inbox:
@@ -158,17 +179,20 @@ class Inbox:
             for root,reference,kind,base,files in sources():
                 key=os.path.normcase(str(base));rel=str(base.relative_to(root))
                 try:
-                    sig=fingerprint(files);observed[key]=sig
+                    multidisc=kind=="audio" and any(p.parent!=base for p in files) and base.is_dir()
+                    relative=base if multidisc else None
+                    sig=fingerprint(files,relative);observed[key]=sig
                     if indexed.get(key)==sig:continue
                     if not manual and self.failed.get(key,(None,))[0]==sig:
                         errors.append(self.failed[key][1]);continue
                     if self.seen.get(key)!=sig or any(time()-p.stat().st_mtime<5 for p in files):
                         waiting+=1;continue
                     def verify():
-                        if fingerprint(files)!=sig:
+                        if fingerprint(files,relative)!=sig:
                             raise InterruptedError("Kopiervorgang läuft noch.")
-                    title=base.name if base.is_dir() and len(files)>1 else ""
-                    self.lib.import_tracks([(p,p.name) for p in files],{"category":kind,"title":title},scan=(key,sig),verify=verify,link_root=reference)
+                    title=base.name if base.is_dir() and (multidisc or len(files)>1) else ""
+                    tracks=[(p,p.relative_to(base).as_posix() if multidisc else p.name) for p in files]
+                    self.lib.import_tracks(tracks,{"category":kind,"title":title},scan=(key,sig),verify=verify,link_root=reference)
                     self.failed.pop(key,None);count+=1
                 except (FileNotFoundError,InterruptedError):
                     waiting+=1

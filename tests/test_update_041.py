@@ -12,13 +12,57 @@ import zipfile
 import test_server
 from activity import merged, streak
 from abs_history import apply_import
-from scanner import Inbox
+from scanner import Inbox, fingerprint, groups
 
 
 class UpdateTests(unittest.TestCase):
     setUp=test_server.ServerTest.setUp
     tearDown=test_server.ServerTest.tearDown
     call=test_server.ServerTest.call
+
+    def test_rescan_groups_numbered_discs_and_moves_each_profiles_position(self):
+        with TemporaryDirectory() as tmp, patch("media_tools.shutil.which",return_value=None):
+            root=Path(tmp)
+            title=root/"Author"/"Vol 07 - Example"
+            inbox=Inbox(self.lib)
+            inbox.change_linked(str(root))
+            for disc in (10,2,1):
+                folder=title/f"CD {disc}"
+                folder.mkdir(parents=True)
+                for track in (2,10):
+                    path=folder/f"{track}.wav"
+                    with wave.open(str(path),"wb") as wav:
+                        wav.setparams((1,2,8000,0,"NONE","NONE"))
+                        wav.writeframes(bytes(16000))
+                    os.utime(path,(1600000000,1600000000))
+                tracks=[folder/"2.wav",folder/"10.wav"]
+                book=self.lib.import_tracks([(p,p.name) for p in tracks],{"category":"audio","title":folder.name},
+                      scan=(os.path.normcase(str(folder)),fingerprint(tracks)),link_root=root)
+                with self.lib.db() as db:
+                    if disc in (2,10):
+                        from library import save_progress
+                        file=db.execute("SELECT edition FROM books WHERE id=?",(book,)).fetchone()[0]
+                        save_progress(db,disc,dict(kind="narration",fileId=file,percentage=75,
+                            editedAt="1970-01-01T00:00:00.000Z",narration=dict(seconds=1.5,sectionIndex=1)))
+                        db.execute("INSERT INTO bookmarks(owner,book,edition,chapter,offset,cue,label) VALUES(?,?,?,1,0,0,'Mark')",(disc,book,file))
+            for _ in range(3):inbox.scan()
+            self.assertEqual(inbox.status()["errors"],[])
+            self.assertEqual(inbox.status()["imported"],0)
+            with self.lib.db() as db:
+                rows=db.execute("SELECT * FROM books WHERE merged_into IS NULL").fetchall()
+                self.assertEqual([r["title"] for r in rows],[title.name])
+                file=rows[0]["edition"]
+                offsets={r["owner"]:json.loads(r["data"])["narration"]["seconds"] for r in db.execute("SELECT * FROM progress WHERE edition=?",(file,))}
+                self.assertEqual(offsets,{2:3.5,10:5.5})
+                self.assertEqual(dict(db.execute("SELECT owner,chapter FROM bookmarks WHERE edition=?",(file,))),{2:3,10:5})
+                dest=self.lib.edition(db,rows[0]["id"])[1]
+                info=json.loads((dest/"index.json").read_text(encoding="utf8"))
+                self.assertEqual([s["name"] for s in info["sections"]],[f"CD {d}/{i}.wav" for d in (1,2,10) for i in (2,10)])
+            sibling=title.parent/"Vol 08 - Separate"
+            sibling.mkdir()
+            (sibling/"1.wav").touch()
+            (title/"CD 1"/"edition.epub").touch()
+            self.assertEqual({p for _,p,_ in groups(root)},{title,sibling,title/"CD 1"/"edition.epub"})
 
     def test_linked_collection_resources_offline_download_and_restart(self):
         with TemporaryDirectory() as tmp:
@@ -73,7 +117,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn('method="post" action="web/login"',html)
         self.assertNotRegex(html,r'(src|href)="/')
         self.assertEqual(html.count("<script"),1)
-        bundle=self.call("/audilege-ui.js?v=0.4.1",raw=True)[2]
+        bundle=self.call("/audilege-ui.js?v=0.4.2",raw=True)[2]
         self.assertLess(bundle.index(b"function tr("),bundle.index(b"const categories ="))
         credentials={"username":"eins","password":"test-fixture-1","cookiePath":"/medien/audilege/"}
         origin={"Origin":"https://school.example","Host":"school.example"}
