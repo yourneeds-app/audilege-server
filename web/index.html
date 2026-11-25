@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark"><title>Audilege · Bibliothek</title>
 <link rel="icon" href="icon.webp"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="interface.css">
-<link rel="stylesheet" href="shell.css"><script defer src="audilege-ui.js?v=0.4.8"></script></head>
+<link rel="stylesheet" href="shell.css"><script defer src="audilege-ui.js?v=0.4.9"></script></head>
 <body>
 <link rel="stylesheet" href="collection.css">
 <main id="loginView" class="login"><img class="wordmark" src="audilege.webp" alt="Audilege von yourneeds">
@@ -16,10 +16,10 @@
 <div class="profile"><button id="profileNav">Server &amp; Profil<small id="accountName"></small></button><button id="settingsNav">Einstellungen</button></div></aside>
 <main class="page">
 <section id="profileView" hidden><h1>Server &amp; Profil</h1><dl class="panel"><dt>Angemeldet als</dt><dd id="profileName"></dd><dt>Server</dt><dd id="profileServer"></dd></dl><button id="logout">Abmelden</button></section>
-<section id="settingsView" hidden><h1>Einstellungen</h1><div id="preferences"></div></section>
+<section id="settingsView" hidden><h1>Einstellungen</h1><div id="preferences"></div><section class="panel prefGroup"><h2>Audiobookshelf-Statistik</h2><button id="absOpen">Aus Audiobookshelf importieren</button></section></section>
 <section id="shelf"><button class="textButton" id="folderBack" hidden>← Bibliothek</button><header><h1 id="shelfTitle">Bibliothek</h1><button class="primary" id="add">Titel hinzufügen</button></header>
 <div id="resume"></div><div class="shelfTools"><div id="categories" class="filters"></div><input type="search" id="bookSearch" placeholder="Bibliothek durchsuchen" aria-label="Bibliothek durchsuchen"><select id="shelfSort" aria-label="Sortierung"><option value="new">Neueste zuerst</option><option value="old">Älteste zuerst</option><option value="az">Titel A–Z</option><option value="za">Titel Z–A</option><option value="author">Autor A–Z</option><option value="series">Reihe A–Z</option><option value="seriesDesc">Reihe Z–A</option><option value="location">Speicherort A–Z</option><option value="locationDesc">Speicherort Z–A</option></select><label class="seriesSwitch"><input type="checkbox" id="showSeries"> Reihe anzeigen</label></div><div id="books"></div><section id="jobs"></section></section>
-<section id="statistics" hidden><header><h1>Statistik</h1><button id="absOpen">Aus Audiobookshelf importieren</button></header>
+<section id="statistics" hidden><header><h1>Statistik</h1></header>
 <div id="statsBody"></div></section>
 <section id="users" hidden><header><h1>Verwaltung</h1><button class="primary" id="newUser">Benutzer anlegen</button></header><div class="modeTabs" role="group" aria-label="Verwaltungsbereich"><button id="accountsTab" aria-pressed="true">Benutzer</button><button id="inboxTab" aria-pressed="false">Medieneingang</button></div><div class="userList" id="userList"></div><section class="panel" id="inboxPanel" hidden><h2>Überwachter Ordner</h2><p id="inboxPath"></p><p>EPUBs und einzelne Hördateien hier ablegen. Für mehrteilige Hörbücher einen Unterordner pro Buch verwenden. Dateien im Unterordner „Podcasts“ erscheinen als einzelne Folgen.</p><details id="folderDetails"><summary>Ordner ändern</summary><form id="folderForm"><label>Ordnerpfad auf dem Server<input id="mediaFolder" required placeholder="D:\Hörbücher"></label><button>Ordner übernehmen</button></form></details><h2>Bibliothek direkt einbinden</h2><p>Hörbücher und EPUBs am vorhandenen Speicherort nutzen. Der Server liest diesen Ordner und seine Unterordner.</p><p id="linkedPath"></p><button id="linkedBrowse">Sammlungsordner wählen</button><button id="linkedStop" hidden>Überwachung beenden</button><button id="scanNow">Jetzt scannen</button><p id="scanStatus" role="status"></p></section></section>
 <section id="reader" hidden><div class="readerTop"><button id="back" class="textButton">← Bibliothek</button><div class="modeTabs" id="readerModes" role="group" aria-label="Modus wechseln"></div>

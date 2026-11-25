@@ -1,4 +1,6 @@
-# Audilege Server 0.4.8
+# Audilege Server 0.4.9
+
+The one-time Audiobookshelf import is under Settings → Audiobookshelf statistics.
 
 Keep ebooks, audiobooks, synchronized read-along editions and subscribed podcasts on your own computer. A profile shares positions between the web reader and Audilege for Android. BookOrbit can be used through a separate app profile.
 

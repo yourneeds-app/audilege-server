@@ -1,4 +1,6 @@
-# Audilege Server 0.4.8
+# Audilege Server 0.4.9
+
+Der einmalige Audiobookshelf-Import steht unter Einstellungen → Audiobookshelf-Statistik.
 
 For Windows and Linux, with a German and English web interface. See [the English quick start](README.en.md) and the [release downloads](https://github.com/yourneeds-app/audilege-server/releases).
 
@@ -110,7 +112,7 @@ Standardmäßig installiert das Skript die festgelegten Worker-Versionen in `~/.
 ## Audiobookshelf-Statistik einmalig übernehmen
 
 1. **Audiobookshelf-Statistik.cmd** unter Windows oder `sh Audiobookshelf-Statistik.sh` unter Linux starten. Die Adresse der bestehenden Audiobookshelf-Instanz und einen Zugangsschlüssel des gewünschten Benutzers eingeben. Der Schlüssel wird verdeckt eingegeben und nur für diesen Export im Arbeitsspeicher verwendet.
-2. In Audilege mit dem gewünschten Zielkonto anmelden. Unter **Statistik → Aus Audiobookshelf importieren** die erzeugte JSON-Datei aus dem Downloadordner auswählen.
+2. In Audilege mit dem gewünschten Zielkonto anmelden. Unter **Einstellungen → Audiobookshelf-Statistik → Aus Audiobookshelf importieren** die erzeugte JSON-Datei aus dem Downloadordner auswählen.
 3. Die Vorschau nennt neue Hörsitzungen, zusätzliche Hörzeit und die Anzahl der Fortschrittseinträge. Mit **Importieren** bestätigen. Eine wiederholt ausgewählte Datei zählt dieselben Sitzungen einmal.
 
 Der Export liest die paginierte persönliche Hörhistorie und die gespeicherten Medienfortschritte. Für Titel ohne Hörsitzung fragt er bei Bedarf die Buchmetadaten ab. Die Historie zeigt tatsächliche Hörsekunden je Titel und Tag, verfügbare E-Book- und Hörfortschritte sowie Abschlüsse. Ein E-Book-Prozentwert liefert keine Lesedauer. Die ursprünglichen Audiobookshelf-Kennungen werden für die Historie aufbewahrt. Das ersetzt keine Buchdateien und überschreibt keine aktuellen Audilege-Hörstände. Es gibt keinen laufenden Hintergrundabgleich mit Audiobookshelf.
