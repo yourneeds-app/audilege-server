@@ -23,7 +23,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 from abs_history import apply_import, number
-from books import epub_fields,resource,xml
+from books import audio_art_path, epub_fields,resource,source_audio_art,xml
 from library import AUDIO, Library, ROOT, TYPES, get_progress, save_progress
 from metadata import SOURCES, fetch_cover, image_type, search
 from podcasts import Subscriptions, import_episode, preview
@@ -518,15 +518,13 @@ class Handler(BaseHTTPRequestHandler):
                     if variant=="book" and edition["cover"]:
                         return self.artwork(resource(folder,edition["cover"]),mimetypes.guess_type(edition["cover"])[0] or "application/octet-stream",small)
                     if variant=="audio":
-                        if (folder/"audio-cover.jpg").is_file():
-                            return self.artwork(folder/"audio-cover.jpg","image/jpeg",small)
+                        art=audio_art_path(folder)
+                        if art:return self.artwork(art,mimetypes.guess_type(art.name)[0],small)
                         # Earlier merged editions retain the embedded artwork of the audio source.
                         for prev in db.execute("""SELECT e.folder FROM editions e JOIN books b ON e.book=b.id
-                            WHERE (b.id=? OR b.merged_into=?) AND e.cover='cover.jpg' ORDER BY e.id DESC""",(book,book)):
-                            source=self.lib.data/"editions"/prev[0]
-                            if not (source/"resources.json").is_file():continue
-                            if any(re.fullmatch(r"track0\.[a-z0-9]+",key) for key in json.loads((source/"resources.json").read_text(encoding="utf8"))):
-                                return self.artwork(resource(source,"cover.jpg"),"image/jpeg",small)
+                            WHERE (b.id=? OR b.merged_into=?) AND e.cover IN ('cover.jpg','cover.png','cover.webp') ORDER BY e.id DESC""",(book,book)):
+                            source=source_audio_art(self.lib.data/"editions"/prev[0])
+                            if source:return self.artwork(source[1],mimetypes.guess_type(source[0])[0],small)
                     custom=db.execute("SELECT mime,image FROM book_covers WHERE book=?",(book,)).fetchone()
                     if custom:
                         return self.artwork(custom["image"],custom["mime"],small)

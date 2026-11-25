@@ -1,13 +1,15 @@
 "use strict";
 function cover(book,variant="") {
+  const role=variant||(["audio","podcast"].includes(book.category)?"audio":"book");
+  const classes=role==="audio"?"art audioArt":"art";
   function fallback(){
-    const placeholder=el("span",null,"art noCover");placeholder.setAttribute("aria-hidden","true");
+    const placeholder=el("span",null,classes+" noCover");placeholder.setAttribute("aria-hidden","true");
     placeholder.append(el("span",book.title));return placeholder;
   }
   if(!book.cover&&!(variant==="audio"&&book.category==="audilege"))return fallback();
-  const img=el("img",null,"art");img.alt="";img.onerror=()=>img.replaceWith(fallback());
+  const img=el("img",null,classes);img.alt="";img.onerror=()=>img.replaceWith(fallback());
   img.loading="lazy";img.decoding="async";
-  img.src="api/v1/books/"+book.id+(variant?"/cover?art=":"/thumbnail?size=360&art=")+(variant||(book.category==="audio"||book.category==="podcast"?"audio":"book"))+"&rev="+encodeURIComponent(shelfRevision);return img;
+  img.src="api/v1/books/"+book.id+(variant?"/cover?art=":"/thumbnail?size=360&art=")+role+"&rev="+encodeURIComponent(shelfRevision);return img;
 }
 function renderResume(visible) {
   const box=$("resume");box.replaceChildren();

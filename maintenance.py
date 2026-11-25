@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request,urlopen
 from zipfile import ZipFile
 
-VERSION="0.4.3"
+VERSION="0.4.4"
 REPO="https://github.com/yourneeds-app/audilege-server"
 SCHEMA="""
 CREATE TABLE IF NOT EXISTS player_items(owner INTEGER,book INTEGER,kind TEXT,value TEXT,PRIMARY KEY(owner,book,kind));
@@ -106,13 +106,12 @@ def retention(lib,db,d):
         if not any(s.get("cues") for s in info["sections"]) or not all(resource(folder,k).is_file() for k in json.loads((folder/"resources.json").read_text(encoding="utf8"))):
             raise ValueError("Mitleseressourcen unvollständig.")
     if action=="trash":
-        # Older merged editions may only carry their audiobook cover in the predecessor.
+        from books import audio_art_path,source_audio_art
         for r in editions:
             old=lib.data/"editions"/r["folder"]
-            if not (folder/"audio-cover.jpg").is_file() and (old/"resources.json").is_file():
-                mapping=json.loads((old/"resources.json").read_text(encoding="utf8"))
-                if "cover.jpg" in mapping and any(k.startswith("track0.") for k in mapping):
-                    shutil.copyfile(resource(old,"cover.jpg"),folder/"audio-cover.jpg")
+            if not audio_art_path(folder):
+                art=source_audio_art(old)
+                if art:shutil.copyfile(art[1],folder/("audio-"+art[0]))
             db.execute("INSERT OR REPLACE INTO trash VALUES(?,?,'trash')",(r["folder"],job))
     if action=="restore":db.execute("UPDATE trash SET target='library' WHERE job=?",(job,))
     db.execute("INSERT OR REPLACE INTO retention VALUES(?,?)",(job,action))

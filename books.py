@@ -177,6 +177,32 @@ def index_epub(epub, folder, *, linked=False):
     return result
 
 
+def track_picture(track,metadata):
+    image=metadata.get("picture") or b""
+    if not image and any(s.get("disposition",{}).get("attached_pic") for s in metadata["streams"]):
+        result=subprocess.run(command(track,"--cover"),capture_output=True,timeout=60)
+        if result.returncode==0:image=result.stdout
+    if len(image)<=24*1024**2:
+        if image.startswith(b"\xff\xd8"):return "cover.jpg","image/jpeg",image
+        if image.startswith(b"\x89PNG"):return "cover.png","image/png",image
+        if image.startswith(b"RIFF") and image[8:12]==b"WEBP":return "cover.webp","image/webp",image
+
+
+def audio_art_path(folder):
+    for name in ("audio-cover.jpg","audio-cover.png","audio-cover.webp"):
+        if (folder/name).is_file():return folder/name
+
+
+def source_audio_art(folder):
+    index=folder/"resources.json"
+    if index.is_file():
+        resources=json.loads(index.read_text(encoding="utf8"))
+        if any(re.fullmatch(r"track0\.[a-z0-9]+",k) for k in resources):
+            for name in ("cover.jpg","cover.png","cover.webp"):
+                path=resource(folder,name)
+                if name in resources and path.is_file():return name,path
+
+
 def audio_epub(target, tracks, title, author, *, linked=False):
     """Give the current Android reader seekable audio chapters in an EPUB media overlay."""
     items, spine, timings = [], [], []
@@ -190,16 +216,11 @@ def audio_epub(target, tracks, title, author, *, linked=False):
                 fields=audio_metadata(metadata)
                 title=title or fields.pop("title","") or Path(label).stem
                 author=author or fields.pop("author","")
-                image=metadata.get("picture")
-                if image and len(image)<=24*1024**2 and image.startswith((b"\xff\xd8",b"\x89PNG")):
-                    cover,mime=("cover.jpg","image/jpeg") if image.startswith(b"\xff\xd8") else ("cover.png","image/png")
+                picture=track_picture(track,metadata)
+                if picture:
+                    cover,mime,image=picture
                     z.writestr(cover,image)
                     items.append(f'<item id="cover" href="{cover}" media-type="{mime}" properties="cover-image"/>')
-                elif any(s.get("disposition",{}).get("attached_pic") for s in metadata["streams"]):
-                    picture=subprocess.run(command(track,"--cover"),capture_output=True,timeout=60)
-                    if picture.returncode==0 and picture.stdout.startswith(b"\xff\xd8"):
-                        z.writestr("cover.jpg",picture.stdout)
-                        items.append('<item id="cover" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>')
             duration = float(metadata["format"]["duration"])
             if not any(s["codec_type"]=="audio" for s in metadata["streams"]) or not math.isfinite(duration) or duration <= 0:
                 raise ValueError("Die Datei enthält keine gültige Tonspur.")

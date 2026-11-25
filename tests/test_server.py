@@ -142,7 +142,16 @@ class ServerTest(unittest.TestCase):
         def add(kind,name,data):
             return self.call("/web/books",{"files":[self.upload(data,name)],"category":kind})["id"]
         book=add("ebook","fixture.epub",epub())
-        audio=add("audio","A.wav",wav.getvalue())
+        # A PNG embedded in the audio and manually assigned role covers must survive pairing.
+        from unittest.mock import patch
+        import base64
+        png=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jNuUAAAAASUVORK5CYII=")
+        with patch("books.probe",return_value={"format":{"duration":"1","tags":{}},"streams":[{"codec_type":"audio"}],"picture":png}):
+            audio=add("audio","A.wav",wav.getvalue())
+        book_art=(Path(__file__).resolve().parents[1]/"web/icon.webp").read_bytes()
+        audio_art=(Path(__file__).resolve().parents[1]/"web/audilege.webp").read_bytes()
+        with self.lib.db() as db:
+            db.executemany("INSERT INTO role_covers VALUES(?,?,?,?)",[(book,"book","image/webp",book_art),(audio,"audio","image/webp",audio_art)])
         podcast=add("podcast","P.wav",wav.getvalue())
         self.call("/web/align",{"book":book,"companion":audio,"files":[],"language":"de"})
         with self.assertRaises(HTTPError):
@@ -154,6 +163,14 @@ class ServerTest(unittest.TestCase):
         (folder/"book.epub").write_bytes(epub(True))
         self.lib.publish(folder,book,"audilege",index_epub(folder/"book.epub",folder),1)
         self.assertEqual(shelf(),{book:"audilege",podcast:"podcast"})
+        def art(role):
+            return self.call(f"/api/v1/books/{book}/cover?art={role}",raw=True)[2]
+        self.assertEqual((art("book"),art("audio")),(book_art,audio_art))
+        self.call(f"/web/admin/metadata/{book}",{"title":"Fiktiver Titel","resetRole":"audio"})
+        self.assertEqual((art("book"),art("audio")),(book_art,png))
+        import maintenance
+        with self.lib.db() as db:maintenance.retention(self.lib,db,{"job":1,"action":"trash","confirmed":True})
+        self.assertEqual((art("book"),art("audio")),(book_art,png))
         self.assertEqual(self.call(f"/api/v1/books/{audio}")["id"],audio)
 
     def test_abs_import_preview_repeat_profile_and_rollback(self):

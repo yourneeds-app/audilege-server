@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event, Thread
 
-from books import audio_epub, index_epub
+from books import audio_epub, index_epub, track_picture
 from abs_history import number
 
 ROOT = Path(sys.executable if getattr(sys,"frozen",False) else __file__).resolve().parent
@@ -185,6 +185,18 @@ def migrate_positions(lib,db,previous,file,book,info,disc_prefix=None):
             db.execute("DELETE FROM player_items WHERE book=?",(e["book"],))
 
 
+def inherit_companion_cover(db,book,companion):
+    # The companion keeps its original category even after its shelf entry is merged.
+    row=db.execute("""SELECT CASE category WHEN 'ebook' THEN 'book' ELSE 'audio' END
+                      FROM books WHERE id=? AND category IN ('ebook','audio')""",(companion,)).fetchone()
+    if row:
+        role=row[0]
+        db.execute("""INSERT OR IGNORE INTO role_covers(book,role,mime,image)
+                      SELECT ?,?,mime,image FROM role_covers WHERE book=? AND role=?""",(book,role,companion,role))
+        db.execute("""INSERT OR IGNORE INTO role_covers(book,role,mime,image)
+                      SELECT ?,?,mime,image FROM book_covers WHERE book=?""",(book,role,companion))
+
+
 class Library:
     def __init__(self, data):
         self.data = Path(data).resolve()
@@ -222,6 +234,11 @@ class Library:
                     db.execute(f"ALTER TABLE {table} ADD COLUMN {field} INTEGER")
             if "label" not in [r[1] for r in db.execute("PRAGMA table_info(abs_progress)")]:
                 db.execute("ALTER TABLE abs_progress ADD COLUMN label TEXT")
+            if not maintenance.get_setting(db,"companion_cover_roles",False):
+                for row in db.execute("""SELECT j.book,j.companion FROM jobs j JOIN books b ON b.id=j.companion
+                                         WHERE j.state='done' AND b.merged_into=j.book ORDER BY j.id DESC"""):
+                    inherit_companion_cover(db,*row)
+                maintenance.setting(db,"companion_cover_roles",True)
         self.wakeup = Event()
 
     @contextmanager
@@ -356,6 +373,7 @@ class Library:
             if job:
                 if originals:db.execute("INSERT INTO uploaded_originals VALUES(?,?)",(job,originals.name))
                 previous=db.execute("SELECT source_edition,companion_edition,companion FROM jobs WHERE id=?",(job,)).fetchone()
+                if previous["companion"]:inherit_companion_cover(db,book,previous["companion"])
                 migrate_positions(self,db,previous,file,book,info)
                 import re
                 filename=re.sub(r'[<>:"/\\|?*\x00-\x1f]','_',info["title"])[:85].rstrip(". ") or "Audilege"
@@ -542,13 +560,12 @@ class Library:
                 info = index_epub(dest/"book.epub",dest)
                 if not any(s["cues"] for s in info["sections"]):
                     raise ValueError("Keine geprüften Zeitmarken erzeugt.")
-                from media_tools import command,probe
+                from media_tools import probe
                 first=next(iter(sorted((job/"audio").glob("*"))),None)
                 if first:
                     try:
-                        if any(s.get("disposition",{}).get("attached_pic") for s in probe(first)["streams"]):
-                            art=subprocess.run(command(first,"--cover"),capture_output=True,timeout=60,check=True).stdout
-                            if art.startswith(b"\xff\xd8\xff"):(dest/"audio-cover.jpg").write_bytes(art)
+                        art=track_picture(first,probe(first))
+                        if art:(dest/("audio-"+art[0])).write_bytes(art[2])
                     except (OSError,ValueError,subprocess.SubprocessError):pass
                 if not row["companion"]:
                     with self.db() as db:
