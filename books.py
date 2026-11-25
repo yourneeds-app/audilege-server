@@ -203,6 +203,22 @@ def source_audio_art(folder):
                 if name in resources and path.is_file():return name,path
 
 
+def embedded_chapters(metadata, duration):
+    chapters=[]
+    previous=0.0
+    for item in metadata.get("chapters",[]):
+        try:
+            start,end=float(item["start_time"]),min(float(item["end_time"]),duration)
+        except (KeyError,TypeError,ValueError):
+            return []
+        if not math.isfinite(start) or not math.isfinite(end) or not previous<=start<end or end-start<.001:
+            return []
+        chapter_title=str(item.get("tags",{}).get("title") or "").strip()
+        chapters.append((start,end,chapter_title or f"Kapitel {len(chapters)+1}"))
+        previous=end
+    return chapters
+
+
 def audio_epub(target, tracks, title, author, *, linked=False, title_folder=""):
     """Give the current Android reader seekable audio chapters in an EPUB media overlay."""
     items, spine, timings = [], [], []
@@ -230,14 +246,19 @@ def audio_epub(target, tracks, title, author, *, linked=False, title_folder=""):
             ext = track.suffix.lower()
             audio = f"track{i}{ext}"
             mime = {".m4b":"audio/mp4",".m4a":"audio/mp4",".mp3":"audio/mpeg",".ogg":"audio/ogg",".wav":"audio/wav",".flac":"audio/flac"}[ext]
-            items += [f'<item id="p{i}" href="{i}.xhtml" media-type="application/xhtml+xml" media-overlay="s{i}"/>',f'<item id="s{i}" href="{i}.smil" media-type="application/smil+xml"/>', f'<item id="a{i}" href="{audio}" media-type="{mime}"/>']
-            spine.append(f'<itemref idref="p{i}"/>')
-            timings.append(f'<meta property="media:duration" refines="#s{i}">{duration:.3f}s</meta>')
+            items.append(f'<item id="a{i}" href="{audio}" media-type="{mime}"/>')
             if linked:
                 z.writestr(audio,b'')
             else:
                 z.write(track,audio)
-            z.writestr(f"{i}.xhtml",f'<html xmlns="http://www.w3.org/1999/xhtml"><head><title>{escape(label)}</title></head><body><h1 id="track">{escape(label)}</h1></body></html>')
-            z.writestr(f"{i}.smil",f'<smil xmlns="http://www.w3.org/ns/SMIL" version="3.0"><body><seq><par><text src="{i}.xhtml#track"/><audio src="{audio}" clipBegin="0s" clipEnd="{duration:.3f}s"/></par></seq></body></smil>')
+            chapters = embedded_chapters(metadata,duration) if ext==".m4b" else []
+            for start,end,name in chapters or [(0.0,duration,label)]:
+                index=len(spine)
+                items.extend((f'<item id="p{index}" href="{index}.xhtml" media-type="application/xhtml+xml" media-overlay="s{index}"/>',
+                              f'<item id="s{index}" href="{index}.smil" media-type="application/smil+xml"/>'))
+                spine.append(f'<itemref idref="p{index}"/>')
+                timings.append(f'<meta property="media:duration" refines="#s{index}">{end-start:.3f}s</meta>')
+                z.writestr(f"{index}.xhtml",f'<html xmlns="http://www.w3.org/1999/xhtml"><head><title>{escape(name)}</title></head><body><h1 id="track">{escape(name)}</h1></body></html>')
+                z.writestr(f"{index}.smil",f'<smil xmlns="http://www.w3.org/ns/SMIL" version="3.0"><body><seq><par><text src="{index}.xhtml#track"/><audio src="{audio}" clipBegin="{start:.3f}s" clipEnd="{end:.3f}s"/></par></seq></body></smil>')
         z.writestr("book.opf", f'<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">urn:audilege:{target.parent.name}</dc:identifier><dc:title>{escape(title)}</dc:title><dc:creator>{escape(author)}</dc:creator><dc:language>de</dc:language>{"".join(timings)}</metadata><manifest>{"".join(items)}</manifest><spine>{"".join(spine)}</spine></package>')
     return {k:v for k,v in fields.items() if k not in ("title","author")}

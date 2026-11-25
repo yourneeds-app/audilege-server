@@ -14,11 +14,31 @@ const [resetLabel,resetInput]=check(tr("Eingebettetes Cover wiederherstellen"));
 document.querySelector(".coverEditor").append(labelControl(tr("Verwendung"),role),resetLabel);
 const adminMenu=el("div",null,"adminActions");$("users").querySelector("header").after(adminMenu);
 adminMenu.append(action(tr("Bibliothek prüfen"),aiStudio),action(tr("Speicher & System"),systemStudio));
+function jobTimes(job){
+  if(job.state!=="running"||!job.started_at)return "";
+  const now=Date.now()/1000;
+  const labels=[tr("Läuft seit {time}").replace("{time}",clock(now-job.started_at))];
+  if(job.phase_at && job.note)labels.push(tr("Aktuelle Phase seit {time}").replace("{time}",clock(now-job.phase_at)));
+  return labels.join(" · ");
+}
 async function adminJobs(){
-  const result=await api("web/admin/jobs"),box=sheet(tr("Aufträge"));
-  if(!result.jobs.length)box.append(el("p",tr("Noch keine Einträge vorhanden.")));
-  for(const j of result.jobs){const row=el("section");row.append(el("strong",j.title),el("p",j.note||({done:tr("Abgeschlossen"),running:tr("Prüfung läuft"),waiting:tr("In Warteschlange"),failed:tr("Prüfung unterbrochen")}[j.state])));
-    if(j.state==="failed")row.append(tool(tr("Erneut versuchen"),async()=>{await api("web/admin/jobs/"+j.id+"/retry","POST",{});await adminJobs();}));box.append(row);}
+  const box=el("div"),container=sheet(tr("Aufträge"));container.append(box);
+  async function refreshJobs(){
+    const result=await api("web/admin/jobs");
+    if(!studio.open||!box.isConnected)return;
+    box.replaceChildren();
+    if(!result.jobs.length)box.append(el("p",tr("Noch keine Einträge vorhanden.")));
+    for(const j of result.jobs){
+      const row=el("section"),status={done:"Abgeschlossen",running:"Prüfung läuft",waiting:"In Warteschlange",failed:"Prüfung unterbrochen"};
+      row.append(el("strong",j.title),el("p",tr(j.note||status[j.state])));
+      const times=jobTimes(j);if(times)row.append(el("small",times));
+      if(j.state==="failed")row.append(tool(tr("Erneut versuchen"),async()=>{await api("web/admin/jobs/"+j.id+"/retry","POST",{});await adminJobs();}));
+      box.append(row);
+    }
+    if(result.jobs.some(j=>j.state==="waiting"||j.state==="running"))
+      setTimeout(()=>{if(studio.open&&box.isConnected)refreshJobs().catch(e=>studioNote.textContent=e.message);},4000);
+  }
+  await refreshJobs();
 }
 adminMenu.append(action(tr("Aufträge"),adminJobs));
 const aiApi=(path,d)=>api("web/admin/ai/"+path,d===undefined?"GET":"POST",d);

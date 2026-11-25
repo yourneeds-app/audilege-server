@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import sys
 
-PROBE = ["-show_entries","stream=codec_type,codec_name:stream_disposition=attached_pic:format=duration:format_tags","-of","json"]
+PROBE = ["-show_entries","stream=codec_type,codec_name:stream_disposition=attached_pic:format=duration:format_tags:chapter=start_time,end_time:chapter_tags=title","-of","json"]
 COVER = ["-map","0:v:0","-frames:v","1","-vf","scale=600:900:force_original_aspect_ratio=decrease","-c:v","mjpeg","-f","image2pipe","pipe:1"]
 AUDIO = ["-map","0:a:0","-vn","-c:a","libmp3lame","-q:a","4","-f","mp3","pipe:1"]
 
@@ -28,6 +28,11 @@ def probe(path):
         try:
             tag=TinyTag.get(path,image=True)
             if tag.duration and tag.duration>0:
+                if path.suffix.lower()==".m4b":
+                    try:
+                        return ffprobe(path)
+                    except (ValueError,OSError,RuntimeError,subprocess.SubprocessError):
+                        pass
                 keys=("album","title","artist","albumartist","year","genre","comment")
                 tags={k:getattr(tag,k) for k in keys if getattr(tag,k,None)}
                 if "albumartist" in tags:tags["album_artist"]=tags.pop("albumartist")
@@ -38,6 +43,10 @@ def probe(path):
         except TinyTagException:
             pass
 
+    return ffprobe(path)
+
+
+def ffprobe(path):
     r=subprocess.run(command(path,"--probe"),capture_output=True,timeout=60,check=True)
     return json.loads(r.stdout)
 

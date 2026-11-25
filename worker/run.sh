@@ -9,7 +9,7 @@ fi
 export PATH="$(cat "$target/runtime-path"):$PATH"
 if [ "$2" = --probe ]; then
     exec ffprobe -protocol_whitelist file,pipe -v error \
-        -show_entries stream=codec_type,codec_name:stream_disposition=attached_pic:format=duration:format_tags -of json "$1"
+        -show_entries stream=codec_type,codec_name:stream_disposition=attached_pic:format=duration:format_tags:chapter=start_time,end_time:chapter_tags=title -of json "$1"
 fi
 if [ "$2" = --cover ]; then
     exec ffmpeg -nostdin -v error -protocol_whitelist file,pipe -i "$1" -map 0:v:0 -frames:v 1 -vf scale=600:900:force_original_aspect_ratio=decrease -c:v mjpeg -f image2pipe pipe:1

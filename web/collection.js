@@ -60,7 +60,7 @@ function globalResults(box,term){
   let count=0;
   const titles=books.filter(b=>matches(b.title,...b.authors.map(a=>a.name),b.metadata?.series,b.metadata?.tags,b.metadata?.isbn,b.podcast?.show,b.podcast?.creator)).sort(compareBooks);
   for(const [heading,items] of [[tr("Titel"),titles.filter(b=>b.category!=="podcast")],[tr("Podcastfolgen"),titles.filter(b=>b.category==="podcast")]]){
-    if(!items.length)continue;count+=items.length;sectionHead(box,heading);const grid=el("div",null,"grid");box.append(grid);appendBookPage(grid,items);
+    if(!items.length)continue;count+=items.length;sectionHead(box,heading);const grid=el("div",null,"grid");box.append(grid);appendBookPage(grid,groupEditions(items));
   }
   for(const [field,heading] of Object.entries(facets)){
     const groups=[...collect(field)].filter(([v])=>matches(v));if(!groups.length)continue;
@@ -102,7 +102,7 @@ function renderStart(box){
       card.append(art,info);box.lastElementChild.append(card);
     }
   }
-  const newest=books.filter(b=>b.category!=="podcast").sort((a,b)=>(b.addedAt||"").localeCompare(a.addedAt||"")||b.id-a.id).slice(0,3);
+  const newest=groupEditions(books).filter(b=>b.category!=="podcast").sort((a,b)=>(b.addedAt||"").localeCompare(a.addedAt||"")||b.id-a.id).slice(0,3);
   const columns=el("div",null,"homeColumns");
   if(newest.length){
     const shelf=el("section");sectionHead(shelf,tr("Neu im Regal"),()=>catalogPage("library"));
@@ -144,7 +144,7 @@ function renderCollection(){
     if(facetValue){
       const items=[...(groups.get(facetValue)||[])];
       items.sort(compareBooks);
-      const grid=el("div",null,"grid");box.append(grid);appendBookPage(grid,items);
+      const grid=el("div",null,"grid");box.append(grid);appendBookPage(grid,groupEditions(items));
       if(shelfPage==="series")for(const link of libraryLinks.filter(x=>x.kind==="gap"&&items.some(b=>b.id===x.book)))box.append(el("p",tr("Fehlender Band: ")+link.target));
     }else groupsInto(box,shelfPage,groups);
     if(!groups.size)box.append(el("p",tr("Noch keine Einträge vorhanden.")));return true;
@@ -154,7 +154,7 @@ function renderCollection(){
     const fresh=books.filter(b=>!b.updatedAt&&b.category!=="podcast");
     const next=fresh.filter(b=>b.metadata?.series&&Number(b.metadata.volume)>0&&books.some(p=>p.metadata?.series===b.metadata.series&&p.readingProgress>=99&&Number(p.metadata.volume)+1===Number(b.metadata.volume)));
     for(const [label,items] of [[tr("Zuletzt hinzugefügt"),books.filter(b=>b.category!=="podcast").sort((a,b)=>b.id-a.id).slice(0,6)],[tr("Nächster Band"),next],[tr("Noch nicht begonnen"),fresh.sort(compareBooks)]]){
-      if(!items.length)continue;sectionHead(box,label);const grid=el("div",null,"grid");box.append(grid);appendBookPage(grid,items);
+      if(!items.length)continue;sectionHead(box,label);const grid=el("div",null,"grid");box.append(grid);appendBookPage(grid,groupEditions(items));
     }
     return true;
   }

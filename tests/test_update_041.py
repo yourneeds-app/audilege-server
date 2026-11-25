@@ -20,6 +20,21 @@ class UpdateTests(unittest.TestCase):
     tearDown=test_server.ServerTest.tearDown
     call=test_server.ServerTest.call
 
+    def test_m4b_embedded_chapters_share_a_seekable_track(self):
+        with TemporaryDirectory() as tmp:
+            source=Path(tmp)/"fixture.m4b"
+            source.write_bytes(b"fictional track data")
+            media={"format":{"duration":30},"streams":[{"codec_type":"audio"}],"chapters":[
+                {"start_time":"0","end_time":"14.5","tags":{"title":"Erstes Kapitel"}},
+                {"start_time":"14.5","end_time":"30","tags":{"title":"Zweites Kapitel"}}]}
+            with patch("books.probe",return_value=media):
+                book=self.lib.import_tracks([(source,source.name)],{"category":"audio","title":"Fiktiv"})
+            publication=self.call(f"/web/editions/{book}")
+            first,second=publication["sections"]
+            self.assertEqual([first["name"],second["name"]],["Erstes Kapitel","Zweites Kapitel"])
+            self.assertEqual(first["cues"][0]["path"],second["cues"][0]["path"])
+            self.assertEqual((second["cues"][0]["begin"],second["cues"][0]["end"]),(14.5,30))
+
     def test_pair_scanned_epub_with_audio_folder(self):
         with TemporaryDirectory() as tmp, patch("media_tools.shutil.which",return_value=None):
             inbox=Inbox(self.lib)
@@ -33,7 +48,11 @@ class UpdateTests(unittest.TestCase):
             for p in folder.iterdir():os.utime(p,(1600000000,1600000000))
             inbox.change_linked(tmp)
             inbox.scan();inbox.scan()
-            ids={b["category"]:b["id"] for b in self.call("/web/library")["books"]}
+            books={b["category"]:b for b in self.call("/web/library")["books"]}
+            ids={category:b["id"] for category,b in books.items()}
+            self.assertEqual(books["ebook"]["companionId"],ids["audio"])
+            mobile=self.call("/api/v1/books/query",{"pagination":{"page":0,"size":100}})["items"]
+            self.assertEqual(next(b for b in mobile if b["category"]=="audio")["companionId"],ids["ebook"])
             url=f"/web/books/{ids['audio']}/companions"
             self.assertEqual(self.call(url)["suggested"],ids["ebook"])
             self.assertEqual(self.call(f"/web/books/{ids['ebook']}/companions")["suggested"],ids["audio"])
@@ -43,6 +62,7 @@ class UpdateTests(unittest.TestCase):
             result=self.call(url)
             self.assertIsNone(result["suggested"])
             self.assertEqual(sum(x["sameFolder"] for x in result["choices"]),2)
+            self.assertNotIn("companionId",self.call(f"/api/v1/books/{ids['audio']}"))
             self.call("/web/align",{"book":ids["audio"],"companion":ids["ebook"],"files":[],"language":"de"})
 
     def test_rescan_groups_numbered_discs_and_moves_each_profiles_position(self):
@@ -154,7 +174,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn('method="post" action="web/login"',html)
         self.assertNotRegex(html,r'(src|href)="/')
         self.assertEqual(html.count("<script"),1)
-        bundle=self.call("/audilege-ui.js?v=0.4.13",raw=True)[2]
+        bundle=self.call("/audilege-ui.js?v=0.4.14",raw=True)[2]
         self.assertLess(bundle.index(b"function tr("),bundle.index(b"const categories ="))
         credentials={"username":"eins","password":"test-fixture-1","cookiePath":"/medien/audilege/"}
         origin={"Origin":"https://school.example","Host":"school.example"}

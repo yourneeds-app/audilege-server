@@ -1,7 +1,7 @@
 ## Deutsch
 
-Der Player zeigt die verbleibende Hörzeit im Kapitel und, wenn verfügbar, im ganzen Buch beim eingestellten Tempo. Nach einem Sprung über den Schieberegler oder zu einem anderen Kapitel lässt sich die vorige Stelle wiederherstellen.
+Eindeutig zugeordnete E-Books und Hörbücher erscheinen als ein Titel mit auswählbaren Ausgaben. Die Formatfilter zeigen weiterhin die jeweilige Ausgabe. „Aufträge“ aktualisiert laufende Abgleiche automatisch und zeigt Laufzeit und Dauer der aktuellen Phase. Neue M4B-Importe übernehmen die eingebetteten Kapitel, wenn FFprobe sie auslesen kann.
 
 ## English
 
-The player shows the time left in the chapter and, when available, the book at the selected speed. Undo returns to the previous position after scrubbing or changing chapters.
+Unambiguously matched ebooks and audiobooks share one title with an edition selector. Format filters still show the selected format. Jobs refresh automatically and show runtime and time in the current stage. New M4B imports use embedded chapters when available through FFprobe.

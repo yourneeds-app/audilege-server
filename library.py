@@ -221,6 +221,10 @@ class Library:
                 db.execute("ALTER TABLE books ADD COLUMN added_at TEXT")
             db.execute("""CREATE TRIGGER IF NOT EXISTS book_added_at AFTER INSERT ON books WHEN NEW.added_at IS NULL
                        BEGIN UPDATE books SET added_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=NEW.id; END""")
+            job_columns={r[1] for r in db.execute("PRAGMA table_info(jobs)")}
+            for column in ("started_at","phase_at"):
+                if column not in job_columns:
+                    db.execute(f"ALTER TABLE jobs ADD COLUMN {column} INTEGER")
             if "cover_revision" not in [r[1] for r in db.execute("PRAGMA table_info(books)")]:
                 db.execute("ALTER TABLE books ADD COLUMN cover_revision TEXT NOT NULL DEFAULT ''")
             for table in ("book_covers", "role_covers"):
@@ -486,8 +490,8 @@ class Library:
             if copy_library_audio is not None:
                 from books import resource
                 info = json.loads((copy_library_audio/"index.json").read_text(encoding="utf8"))
-                for i,s in enumerate(info["sections"]):
-                    name=s["cues"][0]["path"]
+                names=dict.fromkeys(section["cues"][0]["path"] for section in info["sections"] if section["cues"])
+                for i,name in enumerate(names):
                     shutil.copyfile(linked_media.track_path(copy_library_audio,name,resource(copy_library_audio,name)),job/"audio"/f"{i:04}{Path(name).suffix}")
             with self.db() as db:
                 db.execute("BEGIN IMMEDIATE")
@@ -544,7 +548,7 @@ class Library:
                 step=line.decode("utf-8",errors="replace").strip()
                 if step in WORKER_STEPS:
                     log.flush()
-                    with self.db() as db:db.execute("UPDATE jobs SET note=? WHERE id=?",(step,job_id))
+                    with self.db() as db:db.execute("UPDATE jobs SET note=?,phase_at=? WHERE id=?",(step,int(time.time()),job_id))
             process.stdout.close()
             code=process.wait()
         if code:
@@ -560,7 +564,8 @@ class Library:
                 db.execute("BEGIN IMMEDIATE")
                 row = db.execute("SELECT * FROM jobs WHERE state='waiting' ORDER BY id LIMIT 1").fetchone()
                 if row:
-                    db.execute("UPDATE jobs SET state='running' WHERE id=?",(row["id"],))
+                    stamp=int(time.time())
+                    db.execute("UPDATE jobs SET state='running',started_at=?,phase_at=? WHERE id=?",(stamp,stamp,row["id"]))
             if not row:
                 self.wakeup.wait(5)
                 self.wakeup.clear()
@@ -570,7 +575,7 @@ class Library:
             originals=None
             try:
                 ready=self.aligned_epub(job,row["id"],row["language"])
-                with self.db() as db:db.execute("UPDATE jobs SET note='EPUB und Zeitmarken prüfen' WHERE id=?",(row["id"],))
+                with self.db() as db:db.execute("UPDATE jobs SET note='EPUB und Zeitmarken prüfen',phase_at=? WHERE id=?",(int(time.time()),row["id"]))
                 dest.mkdir()
                 try:os.link(ready,dest/"book.epub")
                 except OSError:shutil.copyfile(ready,dest/"book.epub")

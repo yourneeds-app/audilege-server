@@ -49,6 +49,7 @@ async function refresh(initial=false,background=false){
   for(const j of pending){
     const row=el("div",null,"panel jobRow");
     row.append(el("span",j.title+" · "+({waiting:tr("In Warteschlange"),running:j.note||tr("Abgleich wird gestartet"),failed:j.note}[j.state])));
+    const times=jobTimes(j);if(times)row.append(el("small",times));
     if(j.state==="failed"){
       const retry=el("button",tr("Erneut versuchen"));
       retry.onclick=async()=>{retry.disabled=true;try{await api("web/jobs/"+j.id+"/retry","POST",{});await refresh();}catch(e){hint(e);retry.disabled=false;}};
@@ -58,6 +59,10 @@ async function refresh(initial=false,background=false){
   }
   clearTimeout(timer);if(pending.some(j=>["running","waiting"].includes(j.state)))timer=setTimeout(()=>{if(!$("shelf").hidden)refresh(false,true).catch(hint);},3500);
   if(preview)requestAnimationFrame(()=>{if(sequence===refreshSequence)refresh().catch(hint);});
+}
+function groupEditions(list){
+  const ebooks=new Set(list.filter(b=>b.category==="ebook").map(b=>b.id));
+  return list.filter(b=>b.category!=="audio"||!ebooks.has(b.companionId));
 }
 function renderShelf(){
   if(renderCollection())return;
@@ -80,7 +85,7 @@ function renderShelf(){
   if(category==="podcast"){podcastShelf(shelf,visible.filter(b=>b.category==="podcast"),term);return;}
   if(discovering&&!category){
     const grid=el("div",null,"grid");
-    for(const b of visible.filter(b=>b.category!=="podcast"))grid.append(bookTile(b));
+    for(const b of groupEditions(visible).filter(b=>b.category!=="podcast"))grid.append(bookTile(b));
     if(grid.childElementCount)shelf.append(grid);
     if(groups.includes("podcast"))podcastOverview(shelf,term);
     if(!shelf.children.length)shelf.append(el("p",tr("Keine passenden Titel gefunden."),"empty"));
@@ -88,10 +93,11 @@ function renderShelf(){
   }
   for(const k of groups.filter(k=>!category||k===category)){
     if(k==="podcast"){podcastOverview(shelf,term);continue;}
-    if(!visible.some(b=>b.category===k))continue;
+    const titles=(category?visible:groupEditions(visible)).filter(b=>b.category===k);
+    if(!titles.length)continue;
     shelf.append(el("h2",categories[k]));
     const grid=el("div",null,"grid");shelf.append(grid);
-    appendBookPage(grid,visible.filter(b=>b.category===k));
+    appendBookPage(grid,titles);
   }
   if(!shelf.children.length)shelf.append(el("p",tr("Keine passenden Titel gefunden."),"empty"));
 }
@@ -419,6 +425,15 @@ $("text").onclick=e=>{if(!e.target.dataset?.anchor)return;let i=cues.findIndex(q
 function displayBook(book,active){
   detailBook=book;$("reader").dataset.category=book.category;
   $("readerTitle").textContent=book.title;renderDetailFacets(book);
+  const editions=$("detailEditions"),other=books.find(b=>b.id===book.companionId);
+  editions.replaceChildren();
+  if(other){
+    for(const edition of [book,other].sort((a,b)=>a.category==="ebook"?-1:1)){
+      const button=action(tr(edition.category==="ebook"?"E-Book":"Hörbuch"),()=>openReader(edition));
+      button.setAttribute("aria-pressed",String(edition.id===book.id));editions.append(button);
+    }
+  }
+  editions.hidden=!other;
   $("convert").hidden=!["audio","ebook"].includes(book.category);
   $("download").hidden=!["ebook","audilege"].includes(book.category);
   $("download").href="api/v1/books/files/"+book.files[0].id+"/download";

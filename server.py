@@ -35,8 +35,9 @@ from activity import merged
 import maintenance
 
 
-def catalog(db,owner,book_id=None,start=False,storage_roots=None):
+def catalog(db,owner,book_id=None,start=False,storage_roots=None,show_editions=False):
     out = []
+    locations = {}
     where="";args=[owner,owner,book_id,book_id]
     if start:
         where=""" AND b.id IN (SELECT id FROM (SELECT id,row_number() OVER
@@ -75,6 +76,12 @@ def catalog(db,owner,book_id=None,start=False,storage_roots=None):
             "coverRevision":f'{b["edition"]}-{b["cover_revision"]}',
             "resumeMode":resume_mode,"resumeChapter":chapter+(0 if latest_text else 1) if type(chapter) is int else None,
             "files":[{"id":b["edition"],"role":"primary","format":"epub","filename":"book.epub","mediaOverlay":{"available":narrated}}]})
+        if show_editions and b["storage_source"] and b["category"] in ("ebook","audio"):
+            source=Path(b["storage_source"])
+            if b["category"]=="ebook":
+                locations[b["id"]]=source.parent
+            elif source.suffix.lower() not in AUDIO:
+                locations[b["id"]]=source
         if b["category"] == "audio" and b["storage_source"]:
             folder = Path(b["storage_source"]).name
             if b["title"].casefold() == folder.casefold():
@@ -87,7 +94,50 @@ def catalog(db,owner,book_id=None,start=False,storage_roots=None):
         if b["feed"]:
             out[-1]["podcast"]={"show":b["show_title"],"creator":b["creator"],"published":b["published"],
                                 "key":hashlib.sha256(b["feed"].encode()).hexdigest()}
+    if show_editions:
+        pair_editions(db,out,locations)
     return out
+
+
+def pair_editions(db,books,locations):
+    eligible={b["id"]:b for b in books if b["category"] in ("ebook","audio")}
+    blocked=set()
+
+    def pair(left,right):
+        eligible[left]["companionId"]=right
+        eligible[right]["companionId"]=left
+        blocked.update((left,right))
+
+    explicit={}
+    for left,target in db.execute("SELECT book,target FROM library_links WHERE kind='companion'"):
+        if not str(target).isdigit():continue
+        right=int(target)
+        if left in eligible and right in eligible and eligible[left]["category"]!=eligible[right]["category"]:
+            explicit.setdefault(left,set()).add(right)
+            explicit.setdefault(right,set()).add(left)
+    for left,targets in explicit.items():
+        if len(targets)==1:
+            right=next(iter(targets))
+            if explicit[right]=={left}:
+                pair(left,right)
+    blocked.update(explicit)
+
+    def match(values):
+        groups={}
+        for bid,value in values:
+            if bid in blocked or not value:continue
+            groups.setdefault(value,{}).setdefault(eligible[bid]["category"],[]).append(bid)
+        for group in groups.values():
+            ebooks=group.get("ebook",[])
+            audio=group.get("audio",[])
+            if len(ebooks)==len(audio)==1:
+                pair(ebooks[0],audio[0])
+
+    match(locations.items())
+    match((bid,(title,author) if title and author else None)
+          for bid,b in eligible.items()
+          for title,author in [(curation.normalized(b["title"]),curation.normalized(
+              " ".join(a["name"] for a in b["authors"])))])
 
 
 def companion_choices(db, book):
@@ -167,6 +217,10 @@ class Handler(BaseHTTPRequestHandler):
     @property
     def lib(self):
         return self.server.library
+
+    def catalog_roots(self):
+        inbox = getattr(self.server,"inbox",None)
+        return (("collection",inbox.linked),("inbox",inbox.root)) if inbox else ()
 
     def respond(self,status,mime,size,extra=()):
         self.send_response(status)
@@ -352,7 +406,7 @@ class Handler(BaseHTTPRequestHandler):
                 if devices and method in ("GET","POST"):
                     return self.output(maintenance.devices(db,int(devices[1]),self.body()["device"] if method=="POST" else None))
                 if path=="/web/admin/jobs" and method=="GET":
-                    return self.output({"jobs":[dict(r) for r in db.execute("SELECT j.id,b.title,j.state,j.note FROM jobs j JOIN books b ON b.id=j.book ORDER BY j.id DESC LIMIT 100")]})
+                    return self.output({"jobs":[dict(r) for r in db.execute("SELECT j.id,b.title,j.state,j.note,j.started_at,j.phase_at FROM jobs j JOIN books b ON b.id=j.book ORDER BY j.id DESC LIMIT 100")]})
                 retry_admin=re.fullmatch(r"/web/admin/jobs/(\d+)/retry",path)
                 if retry_admin and method=="POST":
                     self.body()
@@ -493,11 +547,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.output(companion_choices(db,int(companion_route[1])))
             if path=="/web/library" and method=="GET":
                 db.execute("BEGIN")
-                jobs=[dict(r) for r in db.execute("SELECT j.id,j.book,b.title,j.state,j.note FROM jobs j JOIN books b ON j.book=b.id WHERE owner=? ORDER BY j.id DESC LIMIT 12",(owner,))]
+                jobs=[dict(r) for r in db.execute("SELECT j.id,j.book,b.title,j.state,j.note,j.started_at,j.phase_at FROM jobs j JOIN books b ON j.book=b.id WHERE owner=? ORDER BY j.id DESC LIMIT 12",(owner,))]
                 account=db.execute("SELECT name,is_admin FROM users WHERE id=?",(owner,)).fetchone()
-                inbox = getattr(self.server, "inbox", None)
-                roots = (("collection", inbox.linked), ("inbox", inbox.root)) if inbox else ()
-                return self.output({"books":catalog(db,owner,start=param("view")=="start",storage_roots=roots),"subscriptions":podcast_subscriptions(db),"jobs":jobs,"account":dict(account),"sources":SOURCES,"revision":revision(db),"version":maintenance.VERSION,
+                return self.output({"books":catalog(db,owner,start=param("view")=="start",storage_roots=self.catalog_roots(),show_editions=True),"subscriptions":podcast_subscriptions(db),"jobs":jobs,"account":dict(account),"sources":SOURCES,"revision":revision(db),"version":maintenance.VERSION,
                     "links":[dict(r) for r in db.execute("SELECT * FROM library_links")]})
             if path=="/web/uploads" and method=="POST":
                 name=str(param("name",""))[:200]
@@ -542,7 +594,7 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/v1/books/query" and method=="POST":
                 data=self.body()
                 page,size=max(0,int(data["pagination"]["page"])),max(1,min(1000,int(data["pagination"]["size"])))
-                rows=catalog(db,owner)
+                rows=catalog(db,owner,storage_roots=self.catalog_roots(),show_editions=True)
                 if data.get("filter"):
                     rows=sorted((b for b in rows if 0<b["readingProgress"]<100),key=lambda b:b["updatedAt"],reverse=True)
                 return self.output(dict(items=rows[page*size:(page+1)*size],total=len(rows)))
@@ -594,7 +646,11 @@ class Handler(BaseHTTPRequestHandler):
                     if not edition["cover"]:
                         raise KeyError("Kein Cover vorhanden.")
                     return self.artwork(resource(folder,edition["cover"]),mimetypes.guess_type(edition["cover"])[0] or "application/octet-stream",small,versioned)
-                detail=catalog(db,owner,book)[0]
+                detail=catalog(db,owner,book,storage_roots=self.catalog_roots())[0]
+                if detail["category"] in ("audio","ebook"):
+                    paired=next((item for item in catalog(db,owner,show_editions=True) if item["id"]==book),None)
+                    if paired and paired.get("companionId"):
+                        detail["companionId"]=paired["companionId"]
                 for old in db.execute("SELECT id FROM editions WHERE book=? AND id<>? AND folder NOT IN (SELECT folder FROM trash WHERE target<>'library') ORDER BY id DESC",(book,edition["id"])):
                     detail["files"].append({"id":old[0],"role":"previous","format":"epub","filename":"previous.epub"})
                 return self.output(detail)
