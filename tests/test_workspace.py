@@ -1,5 +1,6 @@
 import base64
 import io
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -93,6 +94,28 @@ class WorkspaceTest(TestCase):
         self.assertEqual([row["id"] for row in self.call(path)["items"]],[newest])
         self.call("/web/player",{"book":newest,"kind":"played"})
         self.assertEqual(self.call(path)["items"],[])
+
+    def test_sinclair_series_alias_and_renamed_linked_edition(self):
+        from server import catalog
+        with TemporaryDirectory() as tmp, self.lib.db() as db:
+            root=Path(tmp)
+            rows=[
+                ("Erste Folge","John Sinclair – Edition 2000","1",True),
+                ("Spätere Folge","John Sinclair Edition 2000","167",True),
+                ("Das Höllenkreuz","John Sinclair Edition 2000","2000",False),
+                ("Das Höllenkreuz (Jubiläumsausgabe)","John Sinclair Edition 2000","2000",True),
+            ]
+            for title,series,volume,present in rows:
+                book=db.execute("INSERT INTO books(title,author,category,metadata) VALUES(?,'Jason Dark','audio',?)",
+                                (title,json.dumps(dict(series=series,volume=volume)))).lastrowid
+                edition=db.execute("INSERT INTO editions(book,folder) VALUES(?,?)",(book,title)).lastrowid
+                db.execute("UPDATE books SET edition=? WHERE id=?",(edition,book))
+                path=root/title
+                if present:path.mkdir()
+                db.execute("INSERT INTO scanned_media(source,signature,book) VALUES(?,'fixture',?)",(str(path),book))
+            shelf=catalog(db,1,storage_roots=(("collection",root),),show_editions=True)
+            self.assertEqual({b["metadata"]["series"] for b in shelf},{"John Sinclair – Edition 2000"})
+            self.assertEqual({b["title"] for b in shelf},{r[0] for r in rows if r[3]})
 
     def test_metadata_and_cover(self):
         item=self.call("/web/books",{"category":"ebook","files":[self.upload(test_server.epub(),"Buch.epub")]})["id"]

@@ -52,10 +52,15 @@ function collect(field){
   return groups;
 }
 function groupsInto(box,field,groups,limit=Infinity){
-  const options=el("div",null,"facetList");box.append(options);
+  const options=el("div",null,field==="series"?"facetList seriesList":"facetList");box.append(options);
   for(const [value,items] of [...groups].sort((a,b)=>byName.compare(a[0],b[0])).slice(0,limit)){
     const b=action("",()=>catalogPage(field,value));b.append(el("strong",value),el("small",String(items.length)));
-    if(field==="series")b.prepend(cover(items[0]));options.append(b);
+    if(field==="series"){
+      const representative=items.filter(item=>item.cover).sort((a,b)=>volumeOrder(a.metadata?.volume,b.metadata?.volume))[0];
+      if(representative)b.prepend(cover(representative));
+      else b.prepend(el("span","▤","seriesPlaceholder"));
+    }
+    options.append(b);
   }
 }
 function globalResults(box,term){
@@ -136,7 +141,8 @@ function renderCollection(){
   for(const key of Object.keys(facets))$(key+"Nav").setAttribute("aria-current",shelfPage===key&&!term?"page":"false");
   $("libraryNav").setAttribute("aria-current",!custom?"page":"false");
   $("shelfStatus").hidden=shelfPage!=="library"||discovering;
-  $("shelfSort").hidden=!term&&(shelfPage==="start"||shelfPage in facets&&!facetValue);
+  const seriesDetail=shelfPage==="series"&&Boolean(facetValue);
+  $("shelfSort").hidden=!term&&(seriesDetail||shelfPage==="start"||shelfPage in facets&&!facetValue);
   $("showSeries").parentElement.hidden=!term&&(category==="podcast"||shelfPage in facets&&!facetValue);
   if(!custom)return false;
   $("resume").replaceChildren();$("resume").hidden=true;$("categories").replaceChildren();box.replaceChildren();
@@ -147,7 +153,7 @@ function renderCollection(){
     const groups=collect(shelfPage);$("shelfTitle").textContent=facetValue||facets[shelfPage];
     if(facetValue){
       const items=[...(groups.get(facetValue)||[])];
-      items.sort(compareBooks);
+      items.sort(seriesDetail?(a,b)=>volumeOrder(a.metadata?.volume,b.metadata?.volume)||byName.compare(a.title,b.title):compareBooks);
       const grid=el("div",null,"grid");box.append(grid);appendBookPage(grid,groupEditions(items));
       if(shelfPage==="series")for(const link of libraryLinks.filter(x=>x.kind==="gap"&&items.some(b=>b.id===x.book)))box.append(el("p",tr("Fehlender Band: ")+link.target));
     }else groupsInto(box,shelfPage,groups);

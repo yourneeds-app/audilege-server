@@ -124,7 +124,14 @@ function renderShelf(){
 function bookTile(book){
   const tile=el("article",null,"book");
   const button=action("",()=>openReader(book),"bookOpen");
-  button.append(cover(book),el("strong",book.title));
+  const artwork=el("span",null,"shelfArtwork");
+  artwork.append(cover(book));
+  if(book.category!=="podcast"&&(book.played||book.readingProgress>=100)){
+    const check=el("span","✓","shelfCompleted");
+    check.setAttribute("role","img");check.setAttribute("aria-label",tr("Abgeschlossen"));
+    artwork.append(check);
+  }
+  button.append(artwork,el("strong",book.title));
   tile.append(button);
   appendAuthorLinks(tile,book);
   const narrator=book.metadata?.narrator;

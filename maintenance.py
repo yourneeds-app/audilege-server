@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request,urlopen
 from zipfile import ZipFile
 
-VERSION="0.4.19"
+VERSION="0.4.20"
 REPO="https://github.com/yourneeds-app/audilege-server"
 SCHEMA="""
 CREATE TABLE IF NOT EXISTS player_items(owner INTEGER,book INTEGER,kind TEXT,value TEXT,PRIMARY KEY(owner,book,kind));

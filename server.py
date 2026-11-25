@@ -39,6 +39,7 @@ import maintenance
 def catalog(db,owner,book_id=None,start=False,storage_roots=None,show_editions=False,subscribed_podcasts=False):
     out = []
     locations = {}
+    linked_audio = {}
     where="";args=[owner,owner,book_id,book_id]
     if start:
         where=""" AND b.id IN (SELECT id FROM (SELECT id,row_number() OVER
@@ -93,11 +94,31 @@ def catalog(db,owner,book_id=None,start=False,storage_roots=None,show_editions=F
             origin = shelf_location(b["storage_source"], storage_roots)
             out[-1]["storage"] = shelf_location(b["export_path"], storage_roots) if b["export_path"] else origin
             if b["category"] != "podcast":
-                folder_series(origin, out[-1]["metadata"])
+                meta=out[-1]["metadata"]
+                folder_series(origin,meta)
+                series=meta.get("series","")
+                if str(series).casefold() in ("john sinclair edition 2000","john sinclair – edition 2000"):
+                    meta["series"]="John Sinclair – Edition 2000"
+                if show_editions and b["category"]=="audio" and origin["kind"]=="collection" and meta.get("volume"):
+                    title=re.sub(r"\s+\(jubiläumsausgabe\)$","",out[-1]["title"],flags=re.I)
+                    key=(b["author"].casefold(),str(meta.get("series","")).casefold(),str(meta["volume"]),title.casefold())
+                    linked_audio.setdefault(key,[]).append((b["id"],Path(b["storage_source"])))
         if b["feed"]:
             out[-1]["podcast"]={"show":b["show_title"],"creator":b["creator"],"published":b["published"],
                                 "key":hashlib.sha256(b["feed"].encode()).hexdigest()}
     if show_editions:
+        # A renamed linked file may retain an old catalogue entry. Hide that entry
+        # only when an equivalent title still has an accessible source.
+        stale=set()
+        for copies in linked_audio.values():
+            if len(copies)<2:
+                continue
+            present=[(book,path.exists()) for book,path in copies]
+            if any(exists for _,exists in present):
+                stale.update(book for book,exists in present if not exists)
+        if stale:
+            out=[book for book in out if book["id"] not in stale]
+            locations={book:path for book,path in locations.items() if book not in stale}
         pair_editions(db,out,locations)
     return out
 
