@@ -1,8 +1,8 @@
-# Audilege Server 0.4.2
+# Audilege Server 0.4.3
 
 For Windows and Linux, with a German and English web interface. See [the English quick start](README.en.md) and the [release downloads](https://github.com/yourneeds-app/audilege-server/releases).
 
-## Update auf 0.4.2
+## Update auf 0.4.3
 
 Der Scanner fasst CD-Unterordner innerhalb eines Titelordners zu einem Hörbuch zusammen, etwa `Autor/Buchtitel/CD 1` und `Autor/Buchtitel/CD 2`. Die Wiedergabe folgt der Nummerierung von CDs und Titeln. Bereits einzeln eingelesene CD-Ordner werden beim nächsten stabilen Scan im Regal zusammengeführt. Das gilt für den Medieneingang und direkt eingebundene Sammlungen.
 

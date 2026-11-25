@@ -1,8 +1,8 @@
-# Audilege Server 0.4.2
+# Audilege Server 0.4.3
 
 Keep ebooks, audiobooks, synchronized read-along editions and subscribed podcasts on your own computer. A profile shares positions between the web reader and Audilege for Android. BookOrbit can be used through a separate app profile.
 
-## Upgrade to 0.4.2
+## Upgrade to 0.4.3
 
 Numbered CD, Disc or Disk folders inside one book folder are scanned as one audiobook in disc and track order. An existing collection is regrouped automatically during scanning.
 

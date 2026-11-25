@@ -29,6 +29,32 @@
 dialog label input:not([type=checkbox]),dialog label select{width:100%}dialog .toolrow{margin:.7rem 0}
 .studioRows{display:grid;gap:.7rem}.studioRows article{padding:1rem;border:1px solid var(--line);border-radius:.8rem}.studioRows small{color:var(--muted)}
 .studioRows img{height:5rem;max-width:8rem;object-fit:contain}.studioRows input{max-width:100%}
+
+dialog.libraryReview {
+  width: min(84rem, 96vw);
+  max-width: 96vw;
+  padding: clamp(.85rem, 2vw, 2rem);
+}
+.libraryReview .reviewChecks,
+.libraryReview .studioRows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr));
+  gap: .5rem 1rem;
+  margin-block: 1rem;
+}
+.libraryReview .reviewChecks label { margin: 0; }
+.libraryReview .studioRows { align-items: start; gap: 1rem; }
+.libraryReview .studioRows article {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  font: inherit;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.libraryReview .studioRows h3 { margin: 0 0 .5rem; }
+.libraryReview .studioRows p { margin: .5rem 0; }
 ::highlight(voice){background-color:var(--word);color:var(--ink)}
 [data-emphasis=line] ::highlight(voice){background-color:transparent;text-decoration:underline;text-decoration-color:var(--accent)}
 @media(max-width:760px){.globalTools{margin-left:2.9rem;margin-top:-3.3rem;min-height:3.2rem}.homeShelf{display:flex;overflow:auto;gap:.8rem;padding:.25rem}.homeShelf .book{flex:0 0 min(29vw,9rem)}}

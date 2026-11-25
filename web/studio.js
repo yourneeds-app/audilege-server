@@ -2,7 +2,7 @@
 const studio=el("dialog");studio.id="studio";document.body.append(studio);
 const studioTitle=el("h2"),studioBody=el("div"),studioNote=el("p");studioNote.setAttribute("role","status");
 studio.append(studioTitle,studioBody,studioNote,action(tr("Schließen"),()=>studio.close()));
-function sheet(title){studioTitle.textContent=title;studioNote.textContent="";studioBody.replaceChildren();if(!studio.open)studio.showModal();return studioBody;}
+function sheet(title,wide=false){studio.classList.toggle("libraryReview",wide);studioTitle.textContent=title;studioNote.textContent="";studioBody.replaceChildren();if(!studio.open)studio.showModal();return studioBody;}
 function tool(label,fn,cls=""){
   const b=action(label,async()=>{b.disabled=true;try{await fn();}catch(e){studioNote.textContent=e.message;}finally{b.disabled=false;}},cls);return b;
 }
@@ -25,13 +25,14 @@ const aiApi=(path,d)=>api("web/admin/ai/"+path,d===undefined?"GET":"POST",d);
 let reviewPoll;
 studio.addEventListener("close",()=>{if(!studio.open){clearTimeout(reviewPoll);studioBody.replaceChildren();}});
 async function aiStudio(){
-  const s=await aiApi("state"),box=sheet(tr("Bibliothek prüfen")),cfg=s.config;
+  const s=await aiApi("state"),box=sheet(tr("Bibliothek prüfen"),true),cfg=s.config;
   box.append(tool(tr("KI-Anbieter & Modell"),()=>aiSettings(s)));
   if(!cfg.enabled){box.append(el("p",tr("Die KI-Prüfung ist ausgeschaltet.")));return;}
   const scope=choices([["",tr("Gesamte Bibliothek")],...Object.entries(categories).filter(([k])=>books.some(b=>b.category===k)),...books.map(b=>[String(b.id),b.title])],"");
   box.append(labelControl(tr("Umfang"),scope));
   const [changedLabel,changed]=check(uiLanguage==="de"?"Neue und geänderte Titel":"New and changed titles",true);box.append(changedLabel);
-  const checks=Object.entries(s.checks).map(([key,title])=>{const [l,n]=check(tr(title),true);n.value=key;box.append(l);return n;});
+  const options=el("div",null,"reviewChecks");box.append(options);
+  const checks=Object.entries(s.checks).map(([key,title])=>{const [l,n]=check(tr(title),true);n.value=key;options.append(l);return n;});
   const run=tool(tr("Prüfung starten"),async()=>{await aiApi("run",{book:/^\d+$/.test(scope.value)?scope.value:null,category:scope.value in categories?scope.value:null,changed:changed.checked,checks:checks.filter(n=>n.checked).map(n=>n.value)});await aiStudio();},"primary");
   box.append(run);
   const active=s.jobs.find(r=>r.state==="running");
