@@ -9,7 +9,7 @@ function cover(book,variant="") {
   if(!book.cover&&!(variant==="audio"&&book.category==="audilege"))return fallback();
   const img=el("img",null,classes);img.alt="";img.onerror=()=>img.replaceWith(fallback());
   img.loading="lazy";img.decoding="async";
-  img.src="api/v1/books/"+book.id+(variant?"/cover?art=":"/thumbnail?size=360&art=")+role+"&rev="+encodeURIComponent(shelfRevision);return img;
+  img.src="api/v1/books/"+book.id+(variant?"/cover?art=":"/thumbnail?size=360&art=")+role+"&rev="+encodeURIComponent(book.coverRevision||"");return img;
 }
 function renderResume(visible) {
   const box=$("resume");box.replaceChildren();
@@ -159,10 +159,11 @@ $("metaForm").onsubmit=async e=>{
       data.coverData=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result.split(",")[1]);r.onerror=()=>reject(new Error(tr("Cover konnte nicht gelesen werden.")));r.readAsDataURL(file);});
     }else if($("useCover").checked&&coverCandidate)data.coverUrl=coverCandidate;
     data.coverRole=$("coverRole").value;if($("resetCover").checked)data.resetRole=data.coverRole;
-    await api("web/admin/metadata/"+detailBook.id,"POST",data);shelfRevision=String(Date.now());
-    if(data.coverData||data.coverUrl){detailBook.cover=true;delete data.coverData;delete data.coverUrl;}
+    const result=await api("web/admin/metadata/"+detailBook.id,"POST",data);
+    detailBook.cover=result.cover;detailBook.coverRevision=result.coverRevision;
+    delete data.coverData;delete data.coverUrl;
     detailBook.title=data.title;detailBook.authors=data.author?[{name:data.author}]:[];detailBook.metadata=data;
-    $("readerTitle").textContent=data.title;$("author").textContent=data.author;configureBook();$("metadataDialog").close();
+    $("readerTitle").textContent=data.title;renderDetailFacets(detailBook);configureBook();$("metadataDialog").close();
   }catch(err){$("metaStatus").textContent=err.message;}
 };
 $("readTags").onclick=async()=>{

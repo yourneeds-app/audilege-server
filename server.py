@@ -72,6 +72,7 @@ def catalog(db,owner,book_id=None,start=False,storage_roots=None):
             "category":b["category"],"metadata":json.loads(b["metadata"]),"played":bool(b["played"]),"status":"present","libraryId":1,"readingProgress":pct,
             "readStatus":"finished" if pct>=100 else "reading" if pct else "unread",
             "addedAt":b["added_at"],"updatedAt":prog.get("updatedAt") or "", "cover":bool(b["cover"] or b["custom_cover"]),
+            "coverRevision":f'{b["edition"]}-{b["cover_revision"]}',
             "resumeMode":resume_mode,"resumeChapter":chapter+(0 if latest_text else 1) if type(chapter) is int else None,
             "files":[{"id":b["edition"],"role":"primary","format":"epub","filename":"book.epub","mediaOverlay":{"available":narrated}}]})
         if b["category"] == "audio" and b["storage_source"]:
@@ -214,7 +215,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(chunk)
                     remaining-=len(chunk)
 
-    def artwork(self,source,mime,small):
+    def artwork(self,source,mime,small,versioned=False):
         import io
         isfile=isinstance(source,Path)
         if isfile:
@@ -222,7 +223,8 @@ class Handler(BaseHTTPRequestHandler):
             key=hashlib.sha256(f"{source}:{stat.st_mtime_ns}:{stat.st_size}:{small}".encode()).hexdigest()
         else:key=hashlib.sha256(source+str(small).encode()).hexdigest()
         tag='"'+key+'"'
-        headers=[("ETag",tag),("Cache-Control","private, no-cache"),("Content-Security-Policy","sandbox; default-src 'none'")]
+        policy="private, max-age=3600" if versioned else "private, no-cache"
+        headers=[("ETag",tag),("Cache-Control",policy),("Content-Security-Policy","sandbox; default-src 'none'")]
         if self.headers.get("If-None-Match")==tag:
             self.send_response(304)
             for name,value in headers:self.send_header(name,value)
@@ -450,8 +452,9 @@ class Handler(BaseHTTPRequestHandler):
                     elif data.get("resetRole") in ("book","audio"):
                         db.execute("DELETE FROM role_covers WHERE book=? AND role=?",(book,data["resetRole"]))
                     maintenance.setting(db,"catalog_revision",uuid.uuid4().hex)
+                    updated=catalog(db,owner,book)[0]
                     db.commit()
-                    return self.output({})
+                    return self.output({"cover":updated["cover"],"coverRevision":updated["coverRevision"]})
             if path=="/web/logout" and method=="POST":
                 db.execute("DELETE FROM tokens WHERE hash=?",(hashlib.sha256(self.cookies().encode()).digest(),))
                 db.commit()
@@ -569,26 +572,28 @@ class Handler(BaseHTTPRequestHandler):
                     return self.output(dict(page=page,total=total,items=[dict(r) for r in rows]))
                 if suffix:
                     small=suffix=="/thumbnail" and param("size")=="360"
-                    variant=param("art") or ("audio" if db.execute("SELECT category FROM books WHERE id=?",(book,)).fetchone()[0] in ("audio","podcast") else "book")
+                    cover_book=db.execute("SELECT category,cover_revision FROM books WHERE id=?",(book,)).fetchone()
+                    variant=param("art") or ("audio" if cover_book["category"] in ("audio","podcast") else "book")
+                    versioned=param("rev")==f'{edition["id"]}-{cover_book["cover_revision"]}'
                     override=db.execute("SELECT mime,image FROM role_covers WHERE book=? AND role=?",(book,variant)).fetchone()
                     if override:
-                        return self.artwork(override["image"],override["mime"],small)
+                        return self.artwork(override["image"],override["mime"],small,versioned)
                     if variant=="book" and edition["cover"]:
-                        return self.artwork(resource(folder,edition["cover"]),mimetypes.guess_type(edition["cover"])[0] or "application/octet-stream",small)
+                        return self.artwork(resource(folder,edition["cover"]),mimetypes.guess_type(edition["cover"])[0] or "application/octet-stream",small,versioned)
                     if variant=="audio":
                         art=audio_art_path(folder)
-                        if art:return self.artwork(art,mimetypes.guess_type(art.name)[0],small)
+                        if art:return self.artwork(art,mimetypes.guess_type(art.name)[0],small,versioned)
                         # Earlier merged editions retain the embedded artwork of the audio source.
                         for prev in db.execute("""SELECT e.folder FROM editions e JOIN books b ON e.book=b.id
                             WHERE (b.id=? OR b.merged_into=?) AND e.cover IN ('cover.jpg','cover.png','cover.webp') ORDER BY e.id DESC""",(book,book)):
                             source=source_audio_art(self.lib.data/"editions"/prev[0])
-                            if source:return self.artwork(source[1],mimetypes.guess_type(source[0])[0],small)
+                            if source:return self.artwork(source[1],mimetypes.guess_type(source[0])[0],small,versioned)
                     custom=db.execute("SELECT mime,image FROM book_covers WHERE book=?",(book,)).fetchone()
                     if custom:
-                        return self.artwork(custom["image"],custom["mime"],small)
+                        return self.artwork(custom["image"],custom["mime"],small,versioned)
                     if not edition["cover"]:
                         raise KeyError("Kein Cover vorhanden.")
-                    return self.artwork(resource(folder,edition["cover"]),mimetypes.guess_type(edition["cover"])[0] or "application/octet-stream",small)
+                    return self.artwork(resource(folder,edition["cover"]),mimetypes.guess_type(edition["cover"])[0] or "application/octet-stream",small,versioned)
                 detail=catalog(db,owner,book)[0]
                 for old in db.execute("SELECT id FROM editions WHERE book=? AND id<>? AND folder NOT IN (SELECT folder FROM trash WHERE target<>'library') ORDER BY id DESC",(book,edition["id"])):
                     detail["files"].append({"id":old[0],"role":"previous","format":"epub","filename":"previous.epub"})

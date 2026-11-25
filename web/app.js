@@ -31,8 +31,8 @@ function show(id){for(const k of ["shelf","reader","statistics","users","profile
   message("");updateMiniPlayer();
 }
 async function home(){await leaveReader();show("shelf");await refresh();}
-let refreshSequence=0;
-async function refresh(initial=false){
+let refreshSequence=0, lastShelfData="";
+async function refresh(initial=false,background=false){
   const sequence=++refreshSequence;
   const preview=initial&&shelfPage==="start";
   const result=await api("web/library"+(preview?"?view=start":""));
@@ -40,7 +40,9 @@ async function refresh(initial=false){
   books=result.books;subscriptions=result.subscriptions;shelfRevision=JSON.stringify(result.revision);
   account=result.account;sources=result.sources||{};$("accountName").textContent=account.name;$("usersNav").hidden=!account.is_admin;
   libraryLinks=result.links||[];$("versionNav").textContent="Audilege Server "+result.version;
-  renderShelf();
+  const shelfData=JSON.stringify([books,subscriptions,libraryLinks]);
+  if(!background||lastShelfData!==shelfData)renderShelf();
+  lastShelfData=shelfData;
   const jobs=$("jobs");jobs.replaceChildren();
   const pending=result.jobs.filter(j=>j.state!=="done");
   if(pending.length)jobs.append(el("h2",tr("Aufträge")));
@@ -54,7 +56,7 @@ async function refresh(initial=false){
     }
     jobs.append(row);
   }
-  clearTimeout(timer);if(pending.some(j=>["running","waiting"].includes(j.state)))timer=setTimeout(()=>{if(!$("shelf").hidden)refresh().catch(hint);},3500);
+  clearTimeout(timer);if(pending.some(j=>["running","waiting"].includes(j.state)))timer=setTimeout(()=>{if(!$("shelf").hidden)refresh(false,true).catch(hint);},3500);
   if(preview)requestAnimationFrame(()=>{if(sequence===refreshSequence)refresh().catch(hint);});
 }
 function renderShelf(){
@@ -94,26 +96,30 @@ function renderShelf(){
   if(!shelf.children.length)shelf.append(el("p",tr("Keine passenden Titel gefunden."),"empty"));
 }
 function bookTile(book){
-  const button=el("button",null,"book");
-  button.append(cover(book),el("strong",book.title),el("small",book.authors.map(a=>a.name).join(", ")));
+  const tile=el("article",null,"book");
+  const button=action("",()=>openReader(book),"bookOpen");
+  button.append(cover(book),el("strong",book.title));
+  tile.append(button);
+  appendAuthorLinks(tile,book);
   if($("showSeries").checked&&book.metadata?.series){
     const volume=String(book.metadata.volume??"").trim();
-    button.append(el("small",[book.metadata.series,volume&&tr("Band")+" "+volume].filter(Boolean).join(" · ")));
+    const label=[book.metadata.series,volume&&tr("Band")+" "+volume].filter(Boolean).join(" · ");
+    tile.append(facetLink("series",book.metadata.series,label));
   }
   if(!$("shelfSort").hidden&&["location","locationDesc"].includes($("shelfSort").value)){
     const location=el("small",storageLabel(book),"shelfLocation");
-    location.title=location.textContent;button.append(location);
+    location.title=location.textContent;tile.append(location);
   }
-  if(book.played)button.append(el("small",tr("Gespielt")));
-  if(book.readingProgress>0)button.append(el("small",Math.round(book.readingProgress)+" %"));
-  button.onclick=()=>openReader(book).catch(hint);return button;
+  if(book.played)tile.append(el("small",tr("Gespielt")));
+  if(book.readingProgress>0)tile.append(el("small",Math.round(book.readingProgress)+" %"));
+  return tile;
 }
 $("bookSearch").oninput=renderShelf;
 setInterval(async()=>{
   if(!account||document.hidden||$("shelf").hidden||document.querySelector("dialog[open]"))return;
   try{
     const revision=await api("web/library/revision");
-    if(JSON.stringify(revision)!==shelfRevision)await refresh();
+    if(JSON.stringify(revision)!==shelfRevision)await refresh(false,true);
   }catch(e){hint(e);}
 },15000);
 function imports(b=null,editions={choices:[],suggested:null}){
@@ -412,7 +418,7 @@ $("text").onclick=e=>{if(!e.target.dataset?.anchor)return;let i=cues.findIndex(q
   if(i>=0){setCue(i,0,!media.paused);dirty=true;queueProgress();}};
 function displayBook(book,active){
   detailBook=book;$("reader").dataset.category=book.category;
-  $("readerTitle").textContent=book.title;$("author").textContent=book.authors.map(a=>a.name).join(", ");
+  $("readerTitle").textContent=book.title;renderDetailFacets(book);
   $("convert").hidden=!["audio","ebook"].includes(book.category);
   $("download").hidden=!["ebook","audilege"].includes(book.category);
   $("download").href="api/v1/books/files/"+book.files[0].id+"/download";

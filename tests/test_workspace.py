@@ -46,9 +46,18 @@ class WorkspaceTest(TestCase):
         book=self.call("/web/library")["books"][0]
         self.assertEqual((book["title"],book["metadata"]["tags"],book["cover"]),("Fiktives Buch","Natur",True))
         self.assertEqual(self.call(f"/api/v1/books/{item}/thumbnail",raw=True)[2],png)
+        thumbnail=f"/api/v1/books/{item}/thumbnail?size=360&rev="
+        version=book["coverRevision"]
+        self.assertEqual(self.call(thumbnail+version,raw=True)[1]["Cache-Control"],"private, max-age=3600")
+        previous=self.call("/web/library")["revision"]
+        self.call(path,{"title":"Fiktives Buch","description":"Geänderte Beschreibung"})
+        self.assertNotEqual(self.call("/web/library")["revision"],previous)
+        self.assertEqual(self.call("/web/library")["books"][0]["coverRevision"],version)
         art=(Path(__file__).resolve().parents[1]/"web/icon.webp").read_bytes()
         self.call(path,{"title":"Fiktives Buch","coverRole":"audio","coverData":base64.b64encode(art).decode()})
         self.assertEqual(self.call(f"/api/v1/books/{item}/cover?art=audio",raw=True)[2],art)
+        self.assertNotEqual(self.call("/web/library")["books"][0]["coverRevision"],version)
+        self.assertEqual(self.call(thumbnail+version,raw=True)[1]["Cache-Control"],"private, no-cache")
         self.assertEqual(self.call(f"/api/v1/books/{item}/cover?art=book",raw=True)[2],png)
         self.call(path,{"title":"Fiktives Buch","resetRole":"audio"})
         self.assertEqual(self.call(f"/api/v1/books/{item}/cover?art=audio",raw=True)[2],png)

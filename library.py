@@ -221,6 +221,12 @@ class Library:
                 db.execute("ALTER TABLE books ADD COLUMN added_at TEXT")
             db.execute("""CREATE TRIGGER IF NOT EXISTS book_added_at AFTER INSERT ON books WHEN NEW.added_at IS NULL
                        BEGIN UPDATE books SET added_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=NEW.id; END""")
+            if "cover_revision" not in [r[1] for r in db.execute("PRAGMA table_info(books)")]:
+                db.execute("ALTER TABLE books ADD COLUMN cover_revision TEXT NOT NULL DEFAULT ''")
+            for table in ("book_covers", "role_covers"):
+                for event, row in (("INSERT", "NEW"), ("UPDATE", "NEW"), ("DELETE", "OLD")):
+                    db.execute(f"""CREATE TRIGGER IF NOT EXISTS {table}_revision_{event} AFTER {event} ON {table}
+                        BEGIN UPDATE books SET cover_revision=lower(hex(randomblob(16))) WHERE id={row}.book; END""")
             if "published" not in [r[1] for r in db.execute("PRAGMA table_info(podcast_items)")]:
                 db.execute("ALTER TABLE podcast_items ADD COLUMN published INTEGER")
             if "creator" not in [r[1] for r in db.execute("PRAGMA table_info(podcast_items)")]:

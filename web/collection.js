@@ -12,6 +12,22 @@ function choices(pairs,selected){
 function catalogPage(name,value=""){
   resetShelf();shelfPage=name;facetValue=value;return home();
 }
+function facetLink(field,value,label=value){
+  return action(label,()=>catalogPage(field,value),"facetLink");
+}
+function appendAuthorLinks(container,book){
+  book.authors.forEach((author,index)=>{
+    if(index)container.append(document.createTextNode(", "));
+    container.append(facetLink("authors",author.name));
+  });
+}
+function renderDetailFacets(book){
+  $("author").replaceChildren();
+  appendAuthorLinks($("author"),book);
+  const series=book.metadata?.series;
+  $("detailSeries").replaceChildren(...(series?[facetLink("series",series)]:[]));
+  $("detailSeries").hidden=!series;
+}
 function appendBookPage(grid,list,offset=0){
   for(const b of list.slice(offset,offset+48))grid.append(bookTile(b));
   if(list.length>offset+48){const next=action(tr("Weitere Titel anzeigen"),()=>{next.remove();appendBookPage(grid,list,offset+48);});grid.append(next);}
