@@ -27,39 +27,11 @@ from books import audio_art_path, epub_fields,resource,source_audio_art,xml
 from library import AUDIO, Library, ROOT, TYPES, get_progress, save_progress
 from metadata import SOURCES, fetch_cover, image_type, search
 from podcasts import Subscriptions, import_episode, preview
-from scanner import Inbox
+from scanner import Inbox, folder_series, shelf_location
 import curation
 import linked_media
 from activity import merged
 import maintenance
-
-
-def shelf_location(source, roots):
-    if source:
-        path = Path(source)
-        for kind, root in roots:
-            if root and path.is_relative_to(root):
-                return {"kind": kind, "path": path.relative_to(root).as_posix()}
-        return {"kind": "source", "path": path.name}
-    return {"kind": "library", "path": ""}
-
-
-def folder_series(location, metadata):
-    if location["kind"] not in ("collection", "inbox"):
-        return
-    parts = location["path"].split("/")
-    if parts[0].casefold() in ("audiobooks", "ebooks", "readaloud", "podcasts"):
-        parts = parts[1:]
-    for i in range(2, len(parts)):
-        match = re.match(r"^(?:vol(?:ume)?|band)\.?\s*(\d+(?:[.,]\d+)?)\s*(?:[-–—]|$)", parts[i], re.I)
-        if match:
-            series = parts[i-1]
-            if not metadata.get("series"):
-                metadata["series"] = series
-            if str(metadata["series"]).casefold() == series.casefold() and metadata.get("volume") in (None, ""):
-                whole, _, decimal = match[1].replace(",", ".").partition(".")
-                metadata["volume"] = str(int(whole)) + ("." + decimal if decimal else "")
-            return
 
 
 def catalog(db,owner,book_id=None,start=False,storage_roots=None):

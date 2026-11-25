@@ -115,7 +115,7 @@ const search=$("bookSearch");globalTools.append(search);document.querySelector("
 const navIcons={startNav:[tr("Start"),"⌂"],seriesNav:[tr("Reihen"),"▤"],tagsNav:[tr("Genres"),"◇"],authorsNav:[tr("Autoren"),"♙"],settingsNav:[tr("Einstellungen"),"⚙"],profileNav:[tr("Server & Profil"),"▣"],versionNav:[tr("Info & Updates"),"ⓘ"]};
 const start=action(tr("Start"),()=>catalogPage("start"));start.id="startNav";$("libraryNav").before(start);
 for(const [key,label] of Object.entries(facets)){const b=action(label,()=>catalogPage(key));b.id=key+"Nav";$("categoryNav").append(b);}
-const versionButton=action("",async()=>{await closeReader();show("settingsView");$("infoPanel").open=true;});versionButton.id="versionNav";$("settingsNav").after(versionButton);
+const versionButton=action("",async()=>{await leaveReader();show("settingsView");$("infoPanel").open=true;});versionButton.id="versionNav";$("settingsNav").after(versionButton);
 for(const [id,[label,symbol]] of Object.entries(navIcons)){
   const b=$(id);b.title=label;b.setAttribute("aria-label",label);b.dataset.symbol=symbol;
 }
@@ -123,7 +123,7 @@ for(const b of [$("libraryNav"),$("statsNav"),$("usersNav"),$("discoverNav")]){b
 $("bookSearch").oninput=()=>{if($("shelf").hidden){show("shelf");}renderShelf();};
 document.addEventListener("keydown",e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"&&!$("shell").hidden&&!document.querySelector("dialog[open]")){
-    e.preventDefault();(async()=>{if($("shelf").hidden){await closeReader();show("shelf");}search.focus();search.select();})().catch(hint);
+    e.preventDefault();(async()=>{if($("shelf").hidden){await leaveReader();show("shelf");}search.focus();search.select();})().catch(hint);
   }
   if(e.key==="Escape"&&document.activeElement===search){search.value="";renderShelf();}
 });

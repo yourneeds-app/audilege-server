@@ -112,13 +112,13 @@ async function advanceQueue(){
   if(!current)return;const old=current;
   const state=await players({kind:"queue",book:old.id,remove:true});if(old!==current)return;
   const id=state.items.find(i=>i.kind==="queue")?.book,b=books.find(b=>b.id===id);
-  if(b){await openReader(b,true,"listen");await media.play();}
+  if(b){await openReader(b,true,"listen",!playerVisible());if(current?.id===b.id)await media.play();}
 }
 const queueNav=action(tr("Als Nächstes"),queueSheet);queueNav.dataset.symbol="☷";queueNav.setAttribute("aria-label",tr("Als Nächstes"));queueNav.title=tr("Als Nächstes");$("statsNav").before(queueNav);
 const options=$("reader").querySelector(".more div");
-const enqueueButton=action(tr("Zu „Als Nächstes“ hinzufügen"),async()=>{await players({book:current.id,kind:"queue"});await queueSheet();});
+const enqueueButton=action(tr("Zu „Als Nächstes“ hinzufügen"),async()=>{await players({book:detailBook.id,kind:"queue"});await queueSheet();});
 const playedButton=action(tr("Gespielt / Ungespielt"),async()=>{
-  const id=current.id,state=await players(),played=state.items.some(x=>x.kind==="played"&&x.book===id),box=sheet(tr("Wiedergabestatus"));
+  const id=detailBook.id,state=await players(),played=state.items.some(x=>x.kind==="played"&&x.book===id),box=sheet(tr("Wiedergabestatus"));
   box.append(tool(played?tr("Als ungespielt markieren"):tr("Als gespielt markieren"),async()=>{await players({book:id,kind:"played",remove:played});studio.close();await refresh();}));
 });
 options.append(enqueueButton,playedButton);

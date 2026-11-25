@@ -27,18 +27,21 @@ studio.addEventListener("close",()=>{if(!studio.open){clearTimeout(reviewPoll);s
 async function aiStudio(){
   const s=await aiApi("state"),box=sheet(tr("Bibliothek prüfen"),true),cfg=s.config;
   box.append(tool(tr("KI-Anbieter & Modell"),()=>aiSettings(s)));
-  if(!cfg.enabled){box.append(el("p",tr("Die KI-Prüfung ist ausgeschaltet.")));return;}
   const scope=choices([["",tr("Gesamte Bibliothek")],...Object.entries(categories).filter(([k])=>books.some(b=>b.category===k)),...books.map(b=>[String(b.id),b.title])],"");
   box.append(labelControl(tr("Umfang"),scope));
   const [changedLabel,changed]=check(uiLanguage==="de"?"Neue und geänderte Titel":"New and changed titles",true);box.append(changedLabel);
   const options=el("div",null,"reviewChecks");box.append(options);
-  const checks=Object.entries(s.checks).map(([key,title])=>{const [l,n]=check(tr(title),true);n.value=key;options.append(l);return n;});
-  const run=tool(tr("Prüfung starten"),async()=>{await aiApi("run",{book:/^\d+$/.test(scope.value)?scope.value:null,category:scope.value in categories?scope.value:null,changed:changed.checked,checks:checks.filter(n=>n.checked).map(n=>n.value)});await aiStudio();},"primary");
+  const [autoLabel,autoApply]=check(tr("Eindeutige Ergänzungen automatisch übernehmen"),true);box.append(autoLabel);
+  const checks=Object.entries(s.checks).filter(([key])=>cfg.enabled||["metadata","series","names"].includes(key)).map(([key,title])=>{const [l,n]=check(tr(title),true);n.value=key;options.append(l);return n;});
+  const run=tool(tr("Prüfung starten"),async()=>{await aiApi("run",{book:/^\d+$/.test(scope.value)?scope.value:null,category:scope.value in categories?scope.value:null,changed:changed.checked,autoApply:autoApply.checked,checks:checks.filter(n=>n.checked).map(n=>n.value)});await aiStudio();},"primary");
   box.append(run);
   const active=s.jobs.find(r=>r.state==="running");
   if(s.jobs.length){const j=s.jobs[0];box.append(el("p",({running:tr("Prüfung läuft"),done:tr("Prüfung abgeschlossen"),failed:tr("Prüfung unterbrochen")}[j.state])+" · "+j.note));}
   if(active){run.disabled=true;reviewPoll=setTimeout(()=>{if(studio.open&&studioTitle.textContent===tr("Bibliothek prüfen"))aiStudio().catch(hint);},5000);}
   const list=el("div",null,"studioRows");box.append(list);
+  const history=el("details"),appliedList=el("div",null,"studioRows");
+  const applied=s.suggestions.filter(p=>p.state==="applied").length;
+  if(applied){history.append(el("summary",tr("Übernommene Änderungen")+" · "+applied),appliedList);box.append(history);}
   for(const p of s.suggestions){
     const row=el("article"),current=el("small",tr(p.evidence)),value=input("text",p.new);row.append(el("h3",p.title),el("p",tr(s.checks[p.kind])+" · "+p.field),el("p",p.reason),current);
     const mutable=["metadata","series","names"].includes(p.kind);
@@ -47,7 +50,7 @@ async function aiStudio(){
       const old=cover(books.find(b=>b.id===p.book),p.field),candidate=el("img");candidate.src=p.new;candidate.alt=tr("Covervorschlag");candidate.referrerPolicy="no-referrer";row.append(line(old,candidate));
     }else row.append(el("p",books.find(b=>String(b.id)===p.new)?.title||p.new));
     const decide=async action=>{await aiApi("review",{action,id:p.id,value:value.value});await refresh();await aiStudio();};
-    row.append(p.state==="applied"?tool(tr("Rückgängig"),()=>decide("undo")):line(tool(tr("Übernehmen"),()=>decide("approve")),tool(tr("Verwerfen"),()=>decide("reject"))));list.append(row);
+    row.append(p.state==="applied"?tool(tr("Rückgängig"),()=>decide("undo")):line(tool(tr("Übernehmen"),()=>decide("approve")),tool(tr("Verwerfen"),()=>decide("reject"))));(p.state==="applied"?appliedList:list).append(row);
   }
 }
 async function aiSettings(s){
@@ -60,7 +63,8 @@ async function aiSettings(s){
   function controls(){endpoint.disabled=!["ollama","compatible"].includes(provider.value);}
   provider.onchange=()=>{endpoint.value=defaults[provider.value];model.value="";key.value="";models.replaceChildren();controls();};controls();
   box.append(el("h3",tr("Kataloge zum Abgleich")));const sources=Object.entries(windowSources()).map(([k,title])=>{const [l,i]=check(title,c.sources.includes(k));box.append(l);return [k,i];});
-  const store=()=>aiApi("settings",{enabled:n.checked,provider:provider.value,endpoint:endpoint.value,model:model.value,key:key.value,clearKey:clearKey.checked,sources:sources.filter(v=>v[1].checked).map(v=>v[0])});
+  const [importsLabel,imports]=check(tr("Neue Buchimporte automatisch prüfen"),!!c.autoImports);box.append(importsLabel);
+  const store=()=>aiApi("settings",{enabled:n.checked,autoImports:imports.checked,provider:provider.value,endpoint:endpoint.value,model:model.value,key:key.value,clearKey:clearKey.checked,sources:sources.filter(v=>v[1].checked).map(v=>v[0])});
   box.append(line(tool(tr("Speichern & Modelle laden"),async()=>{await store();key.value="";clearKey.checked=false;const r=await aiApi("models",{});models.replaceChildren(...r.models.map(m=>new Option(m,m)));studioNote.textContent=r.models.length+tr(" Modelle");model.focus();}),tool(tr("Speichern"),async()=>{await store();await aiStudio();},"primary")));
 }
 function windowSources(){return sources;}

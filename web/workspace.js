@@ -26,7 +26,7 @@ function renderResume(visible) {
 
 let editedUser=null, ownId=0;
 async function listUsers() {
-  await closeReader();show("users");
+  await leaveReader();show("users");
   selectAdminTab(false);
   const result=await api("web/admin/users");ownId=result.self;
   const list=$("userList");list.replaceChildren();
@@ -99,10 +99,10 @@ function fillMeta(data) {
   metaSource=data.source||"";
 }
 function showBookInfo(){
-  const data=current.metadata||{},box=$("bookInfo");box.replaceChildren();
-  if(current.updatedAt)box.append(el("p",tr("Fortschritt")+" · "+Math.round(current.readingProgress)+" %"));
-  for(const link of libraryLinks.filter(l=>["duplicate","companion"].includes(l.kind)&&(l.book===current.id||Number(l.target)===current.id))){
-    const other=books.find(b=>b.id===(link.book===current.id?Number(link.target):link.book));
+  const data=detailBook.metadata||{},box=$("bookInfo");box.replaceChildren();
+  if(detailBook.updatedAt)box.append(el("p",tr("Fortschritt")+" · "+Math.round(detailBook.readingProgress)+" %"));
+  for(const link of libraryLinks.filter(l=>["duplicate","companion"].includes(l.kind)&&(l.book===detailBook.id||Number(l.target)===detailBook.id))){
+    const other=books.find(b=>b.id===(link.book===detailBook.id?Number(link.target):link.book));
     if(other)box.append(action((link.kind==="duplicate"?(uiLanguage==="de"?"Dublette":"Duplicate"):tr("Passende Ausgabe"))+" · "+other.title,()=>openReader(other),"textButton"));
   }
   const summary=[data.series,data.narrator&&(tr("Gelesen von ")+data.narrator),data.year].filter(Boolean).join(" · ");
@@ -116,13 +116,13 @@ function showBookInfo(){
 }
 $("metaOpen").onclick=()=>{
   $("reader").querySelector(".more").open=false;$("matches").replaceChildren();$("metaStatus").textContent="";
-  $("metaTerm").value=current.title;const fields=$("metaFields");fields.replaceChildren();
+  $("metaTerm").value=detailBook.title;const fields=$("metaFields");fields.replaceChildren();
   for(const [key,name] of Object.entries(metadataFields)){
     const label=el("label",name),input=el(key==="description"?"textarea":"input");input.id="field-"+key;input.maxLength=2000;input.required=key==="title";
     label.append(input);fields.append(label);
   }
-  fillMeta({...current.metadata,title:current.title,author:current.authors.map(a=>a.name).join(", ")});
-  selectCover("");$("coverFile").value="";$("coverRole").value=["audio","podcast"].includes(current.category)?"audio":"book";$("resetCover").checked=false;
+  fillMeta({...detailBook.metadata,title:detailBook.title,author:detailBook.authors.map(a=>a.name).join(", ")});
+  selectCover("");$("coverFile").value="";$("coverRole").value=["audio","podcast"].includes(detailBook.category)?"audio":"book";$("resetCover").checked=false;
   const opts=$("sourceOptions");opts.replaceChildren(el("legend",tr("Suchanbieter")));
   let selected=Object.keys(sources);try{selected=JSON.parse(localStorage.getItem("audilege-catalogues"))??selected;}catch{}
   for(const [id,name] of Object.entries(sources)){
@@ -159,14 +159,14 @@ $("metaForm").onsubmit=async e=>{
       data.coverData=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result.split(",")[1]);r.onerror=()=>reject(new Error(tr("Cover konnte nicht gelesen werden.")));r.readAsDataURL(file);});
     }else if($("useCover").checked&&coverCandidate)data.coverUrl=coverCandidate;
     data.coverRole=$("coverRole").value;if($("resetCover").checked)data.resetRole=data.coverRole;
-    await api("web/admin/metadata/"+current.id,"POST",data);shelfRevision=String(Date.now());
-    if(data.coverData||data.coverUrl){current.cover=true;delete data.coverData;delete data.coverUrl;}
-    current.title=data.title;current.authors=data.author?[{name:data.author}]:[];current.metadata=data;
+    await api("web/admin/metadata/"+detailBook.id,"POST",data);shelfRevision=String(Date.now());
+    if(data.coverData||data.coverUrl){detailBook.cover=true;delete data.coverData;delete data.coverUrl;}
+    detailBook.title=data.title;detailBook.authors=data.author?[{name:data.author}]:[];detailBook.metadata=data;
     $("readerTitle").textContent=data.title;$("author").textContent=data.author;configureBook();$("metadataDialog").close();
   }catch(err){$("metaStatus").textContent=err.message;}
 };
 $("readTags").onclick=async()=>{
-  try{fillMeta(await api("web/admin/metadata/"+current.id));$("metaStatus").textContent=tr("Dateitags ausgelesen. Änderungen mit Speichern bestätigen.");}
+  try{fillMeta(await api("web/admin/metadata/"+detailBook.id));$("metaStatus").textContent=tr("Dateitags ausgelesen. Änderungen mit Speichern bestätigen.");}
   catch(e){$("metaStatus").textContent=e.message;}
 };
 let feedSeq=0,feedReady="";

@@ -87,3 +87,15 @@ dialog.libraryReview {
 ::highlight(voice){background-color:var(--word);color:var(--ink)}
 [data-emphasis=line] ::highlight(voice){background-color:transparent;text-decoration:underline;text-decoration-color:var(--accent)}
 @media(max-width:760px){.globalTools{margin-left:2.9rem;margin-top:-3.3rem;min-height:3.2rem}.homeShelf{display:flex;overflow:auto;gap:.8rem;padding:.25rem}.homeShelf .book{flex:0 0 min(29vw,9rem)}}
+#miniPlayer:not([hidden]) {
+  position:fixed;z-index:6;bottom:max(.8rem,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:.5rem;width:max-content;max-width:calc(100% - 1.5rem);
+  padding:.35rem;border-radius:1rem;background:var(--card);border:1px solid var(--line);box-shadow:0 3px 18px #1112;
+}
+#miniTitle {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:32rem;background:transparent;border:0;text-align:start}
+#miniPlay {flex:none;border-radius:50%;height:2.75rem;width:2.75rem;padding:0}
+#miniArt .art {display:block;width:2.75rem;height:2.75rem;margin:0;border-radius:.6rem;object-fit:cover}
+#miniArt .noCover {padding:.25rem;font-size:.55rem;overflow:hidden}
+main.page:has(#miniPlayer:not([hidden])) {padding-bottom:5.5rem}
+#reader[data-category=podcast] #audioTitle {font-size:clamp(1.7rem,3.3vw,3rem);text-wrap:balance}
+#reader [hidden]:is(#chapterNumber,#listenChapter){display:none}

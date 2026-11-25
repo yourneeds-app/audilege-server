@@ -1,8 +1,12 @@
-# Audilege Server 0.4.6
+# Audilege Server 0.4.7
 
 For Windows and Linux, with a German and English web interface. See [the English quick start](README.en.md) and the [release downloads](https://github.com/yourneeds-app/audilege-server/releases).
 
-## Update auf 0.4.6
+## Update auf 0.4.7
+
+Hörbücher und Podcasts spielen beim Wechsel zwischen Bibliothek, Titeldetails, Statistik und Einstellungen weiter. Ein kompakter Player zeigt Cover, Titel und Pause. Bei Podcasts mit einem einzigen Abschnitt entfallen die doppelte Kapitelüberschrift und die Dateiendung als Kapitelanzeige.
+
+Unter Verwaltung → Bibliothek prüfen ergänzt Audilege fehlende Angaben aus Titelordnern und ausgewählten Katalogen. Reihen und Bandnummern lassen sich über passende Titel und Autoren zuordnen, ausgabenspezifische Angaben wie Erscheinungsjahr und Verlag über eine übereinstimmende ISBN. Unklare Treffer bleiben zur Prüfung. Übernommene Änderungen lassen sich zurücknehmen. In „KI-Anbieter & Modell“ kann ein Admin zusätzlich die automatische Prüfung neuer Buchimporte einschalten. Ausgewählte Onlinekataloge erhalten Suchanfragen, ein aktiviertes Modell erhält die Vergleichsdaten.
 
 Der Webreader passt die zentrierte Buchseite an die Fensterhöhe an. Breite Fenster zeigen zwei Textspalten, kleinere eine. Die Blättertasten bleiben sichtbar. Beim Erstellen einer Audilege-Fassung ist eine eindeutige, eingelesene Gegenausgabe im selben Titelordner vorausgewählt. Bei mehreren Ausgaben wählst du selbst.
 
@@ -31,7 +35,7 @@ Das Proxyziel ist die vom Proxy erreichbare Adresse des Audilege-Prozesses. Best
 
 Die Startseite zeigt begonnene Titel und kurze Regale. Die Suche findet Titel, Hörfolgen, Personen, Reihen und Genres. Im Reader öffnet **Aa** die Leseeinstellungen. **Werkzeuge** enthält Buchsuche, Lesezeichen und die zur Ausgabe passenden Audiofunktionen. Der Browser merkt ausstehende Positionsänderungen für das angemeldete Konto.
 
-Unter **Verwaltung → Bibliothek prüfen** können Admins einen Modellanbieter einrichten. Unterstützt werden OpenAI, Anthropic, Google Gemini, Ollama und kompatible Endpunkte. Bei einer aktiv gestarteten Prüfung erhält der Anbieter die ausgewählten Titelmetadaten, zum Vergleich bis zu 25 benachbarte Katalogeinträge und gegebenenfalls Treffer der gewählten Suchanbieter. Die sechs Prüfungen erzeugen Vorschläge für einzeln freizugebende Änderungen. Ein passendes lokales Modell lässt sich mit Ollama auf demselben Rechner verwenden.
+Unter **Verwaltung → Bibliothek prüfen** können Admins einen Modellanbieter einrichten. Unterstützt werden OpenAI, Anthropic, Google Gemini, Ollama und kompatible Endpunkte. Bei einer Prüfung mit aktiviertem Modell erhält der Anbieter die ausgewählten Titelmetadaten, zum Vergleich bis zu 25 benachbarte Katalogeinträge und gegebenenfalls Treffer der gewählten Suchanbieter. Ein passendes lokales Modell lässt sich mit Ollama auf demselben Rechner verwenden.
 
 Unter **Speicher & System** lassen sich die Updateprüfung und die optionale Passwortwiederherstellung konfigurieren. SMTP verwendet STARTTLS. Das Passwort kommt aus der Umgebungsvariable `AUDILEGE_SMTP_PASSWORD`. Die tägliche Updateprüfung und die KI sind bei der Installation ausgeschaltet. **Server & Profil** führt zu den Gerätesitzungen und zur Bestätigung der eigenen E-Mail-Adresse, sobald die Wiederherstellung eingerichtet ist.
 

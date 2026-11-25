@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark"><title>Audilege · Bibliothek</title>
 <link rel="icon" href="icon.webp"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="interface.css">
-<link rel="stylesheet" href="shell.css"><script defer src="audilege-ui.js?v=0.4.6"></script></head>
+<link rel="stylesheet" href="shell.css"><script defer src="audilege-ui.js?v=0.4.7"></script></head>
 <body>
 <link rel="stylesheet" href="collection.css">
 <main id="loginView" class="login"><img class="wordmark" src="audilege.webp" alt="Audilege von yourneeds">
@@ -32,6 +32,7 @@
 <div class="transport"><button id="skipBack" aria-label="15 Sekunden zurück">↶ 15 s</button><button id="audioPlay" class="primary">Abspielen</button><button id="skipForward" aria-label="15 Sekunden vor">15 s ↷</button><label>Tempo <select id="audioSpeed"><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option></select></label><button id="hideDock" aria-label="Player ausblenden">⌄</button></div></div><button id="showDock" hidden>Player anzeigen</button></div></div>
 <details id="chapterList" hidden><summary>Kapitel</summary><div id="trackRows"></div></details>
 <article id="text" lang="de"></article><div id="paged" hidden><div class="paper"><div id="pageWindow"><article id="pageText"></article></div></div><div class="pager"><button id="prevPage">← Zurück</button><span id="pageNumber" aria-live="polite"></span><button id="nextPage">Weiter →</button></div></div></div></section>
+<div id="miniPlayer" hidden><span id="miniArt" aria-hidden="true"></span><button id="miniTitle" type="button"></button><button id="miniPlay" type="button" class="primary"></button></div>
 <p role="status" aria-live="polite" id="message"></p>
 </main></div>
 <dialog id="importDialog"><form id="importForm"><h2 id="importTitle">Titel hinzufügen</h2>

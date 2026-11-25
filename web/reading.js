@@ -3,22 +3,22 @@ let pageContent="",pageOffset=0,pageIndex=0,pageCount=1;
 let readStart=0,readKind="",dockTimer=0,adjustingSeek=false;
 const modeLabels={read:tr("Lesen"),listen:tr("Hören"),along:tr("Mitlesen")};
 function isPaged(){return readerMode==="read";}
-function configureBook(){
-  enqueueButton.hidden=current.category==="ebook";playedButton.hidden=current.category!=="podcast";
+function configureBook(book=detailBook){
+  enqueueButton.hidden=book.category==="ebook";playedButton.hidden=book.category!=="podcast";
   const modes=$("readerModes"),entries=$("entryModes");modes.replaceChildren();entries.replaceChildren();
-  const options=current.category==="audilege"?["read","listen","along"]:current.category==="ebook"?["read"]:["listen"];
+  const options=book.category==="audilege"?["read","listen","along"]:book.category==="ebook"?["read"]:["listen"];
   for(const mode of options){
     const b=el("button",modeLabels[mode]);b.dataset.mode=mode;
     b.onclick=async()=>{try{await changeMode(mode);}catch(e){hint(e);}};modes.append(b);
-    const entry=el("button",modeLabels[mode]);entry.dataset.mode=mode;entry.onclick=()=>openReader(current,true,mode).catch(hint);entries.append(entry);
+    const entry=el("button",modeLabels[mode]);entry.dataset.mode=mode;entry.onclick=()=>openReader(book,true,mode).catch(hint);entries.append(entry);
   }
   $("reader").querySelector(".more").open=false;$("metaOpen").hidden=!account?.is_admin;
-  $("mediumKind").textContent={ebook:"E-Book",audilege:"Audilege",audio:tr("Hörbuch"),podcast:"Podcast"}[current.category];
-  $("detailArt").replaceChildren(cover(current,current.category==="audilege"?"book":""));
-  $("listenArt").replaceChildren(cover(current,"audio"));showBookInfo();
-  $("audioTitle").textContent=current.title;
-  $("audioCredit").textContent=current.metadata?.narrator?tr("Gelesen von")+" "+current.metadata.narrator:current.authors.map(a=>a.name).join(", ");
-  $("audioKind").textContent=current.category==="podcast"?"Podcast":tr("Hörbuch");
+  $("mediumKind").textContent={ebook:"E-Book",audilege:"Audilege",audio:tr("Hörbuch"),podcast:"Podcast"}[book.category];
+  $("detailArt").replaceChildren(cover(book,book.category==="audilege"?"book":""));
+  $("listenArt").replaceChildren(cover(book,"audio"));showBookInfo();
+  $("audioTitle").textContent=book.title;
+  $("audioCredit").textContent=book.metadata?.narrator?tr("Gelesen von")+" "+book.metadata.narrator:book.authors.map(a=>a.name).join(", ");
+  $("audioKind").textContent=book.category==="podcast"?"Podcast":tr("Hörbuch");
 }
 async function changeMode(mode) {
   if(mode===readerMode||!current)return;
@@ -51,11 +51,14 @@ function syncMode(offset) {
   paperHeading.textContent=section().name;paperHeading.hidden=readerMode==="listen";
   for(const b of $("readerModes").children)b.setAttribute("aria-pressed",String(b.dataset.mode===readerMode));
   const paged=isPaged(),listen=readerMode==="listen";
-  $("reader").dataset.mode=readerMode;
+  if(!$("activeBook").hidden)$("reader").dataset.mode=readerMode;
   $("text").hidden=readerMode!=="along";$("paged").hidden=!paged;$("player").hidden=paged||!cues.length;
   $("listenArt").hidden=$("audioHeading").hidden=!listen;$("listenChapter").textContent=section().name;
   $("chapterWrap").hidden=listen;$("hideDock").hidden=readerMode!=="along";
-  $("chapterList").hidden=!listen;resetDock();updateTransport();
+  const singleEpisode=current.category==="podcast"&&publication.sections.length===1;
+  $("chapterList").hidden=!listen||singleEpisode;
+  $("listenChapter").hidden=$("chapterNumber").hidden=listen&&singleEpisode;
+  resetDock();updateTransport();
   if(listen)renderChapters();
   if(readerMode!=="along")$("modeWrap").hidden=true;else {
     renderText();

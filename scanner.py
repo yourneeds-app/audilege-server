@@ -13,6 +13,34 @@ from datetime import datetime
 from library import AUDIO
 
 
+def shelf_location(source, roots):
+    if source:
+        path = Path(source)
+        for kind, root in roots:
+            if root and path.is_relative_to(root):
+                return {"kind": kind, "path": path.relative_to(root).as_posix()}
+        return {"kind": "source", "path": path.name}
+    return {"kind": "library", "path": ""}
+
+
+def folder_series(location, metadata):
+    if location["kind"] not in ("collection", "inbox"):
+        return
+    parts = location["path"].split("/")
+    if parts[0].casefold() in ("audiobooks", "ebooks", "readaloud", "podcasts"):
+        parts = parts[1:]
+    for i in range(2, len(parts)):
+        match = re.match(r"^(?:vol(?:ume)?|band)\.?\s*(\d+(?:[.,]\d+)?)\s*(?:[-–—]|$)", parts[i], re.I)
+        if match:
+            series = parts[i-1]
+            if not metadata.get("series"):
+                metadata["series"] = series
+            if str(metadata["series"]).casefold() == series.casefold() and metadata.get("volume") in (None, ""):
+                whole, _, decimal = match[1].replace(",", ".").partition(".")
+                metadata["volume"] = str(int(whole)) + ("." + decimal if decimal else "")
+            return
+
+
 def fingerprint(paths, base=None):
     digest=hashlib.sha256()
     for path in paths:
@@ -153,6 +181,8 @@ class Inbox:
                     self.root,self.pending_root=self.pending_root,None
                     self.seen={};self.failed={}
             self.scan(manual)
+            from curation import start_import_review
+            start_import_review(self.lib)
             self.wakeup.wait(15)
 
     def scan(self,manual=False):

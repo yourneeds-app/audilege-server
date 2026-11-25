@@ -28,8 +28,8 @@ function renderSidebarCategories(groups){
   }
 }
 $("discoverNav").onclick=()=>{resetShelf();discovering=true;home().catch(hint);};
-$("profileNav").onclick=async()=>{await closeReader();show("profileView");$("profileName").textContent=account.name;$("profileServer").textContent=new URL(".",document.baseURI).href;};
-$("settingsNav").onclick=async()=>{await closeReader();show("settingsView");};
+$("profileNav").onclick=async()=>{await leaveReader();show("profileView");$("profileName").textContent=account.name;$("profileServer").textContent=new URL(".",document.baseURI).href;};
+$("settingsNav").onclick=async()=>{await leaveReader();show("settingsView");};
 $("shelfSort").value=localStorage.getItem("audilege-sort")||"new";
 $("shelfSort").onchange=()=>{localStorage.setItem("audilege-sort",$("shelfSort").value);renderShelf();};
 const byName=new Intl.Collator(uiLanguage,{numeric:true,sensitivity:"base"});

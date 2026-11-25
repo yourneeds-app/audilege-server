@@ -49,6 +49,56 @@ class ReleaseTest(unittest.TestCase):
         with patch.dict(os.environ,{"AUDILEGE_AI_KEY":"fixture","AUDILEGE_AI_ENDPOINT":"https://different.invalid/v1"}):
             self.assertEqual(curation.credential(self.lib,cfg),"")
 
+    def test_catalogue_additions_require_matching_work_and_preserve_edits(self):
+        with self.lib.db() as db:
+            c=curation.config(db)|{"sources":["google"]}
+            c=curation.save_config(self.lib,db,c)
+            db.execute("UPDATE books SET title='Vol 04 - Fixture',author='Test Author',metadata='{}' WHERE id=?",(self.book,))
+            job=db.execute("INSERT INTO review_jobs VALUES(NULL,'running','')").lastrowid
+        hit=dict(title="Fixture",author="Test Author",series="Example Series",volume="4",year="2004",source="google")
+        wrong=hit|{"author":"Different Author","series":"Wrong Series"}
+        with patch.object(curation.metadata,"search",return_value={"matches":[wrong,hit]}) as search,patch.object(curation,"infer") as model:
+            curation.run_job(self.lib,job,c,1,[self.book],["metadata","series"],auto_apply=True)
+            model.assert_not_called()
+            self.assertEqual(search.call_args.args[0],"Fixture Test Author")
+            with self.lib.db() as db:
+                fields=curation.book_fields(db,self.book)
+                self.assertEqual((fields["series"],fields["volume"]),("Example Series","4"))
+                self.assertNotIn("year",fields)
+                pid=db.execute("SELECT id FROM suggestions WHERE field='volume' AND state='applied'").fetchone()[0]
+                curation.decide(db,dict(id=pid,action="undo"))
+            curation.run_job(self.lib,job,c,1,[self.book],["metadata","series"],auto_apply=True)
+            with self.lib.db() as db:self.assertNotIn("volume",curation.book_fields(db,self.book))
+
+    def test_import_review_only_processes_books_added_after_enabling(self):
+        import time
+        with self.lib.db() as db:
+            curation.save_config(self.lib,db,curation.config(db)|{"autoImports":True},1)
+        book=self.lib.import_tracks([(self.epub,"other.epub")],{"category":"ebook"})
+        curation.start_import_review(self.lib)
+        for _ in range(100):
+            with self.lib.db() as db:
+                if not db.execute("SELECT 1 FROM auto_review_queue").fetchone():break
+            time.sleep(.02)
+        with self.lib.db() as db:
+            self.assertEqual(db.execute("SELECT state FROM review_jobs").fetchone()[0],"done")
+            self.assertEqual([r[0] for r in db.execute("SELECT book FROM review_signatures")],[book])
+
+    def test_model_guess_and_disagreeing_catalogues_stay_pending(self):
+        with self.lib.db() as db:
+            c=curation.save_config(self.lib,db,curation.config(db)|{"enabled":True,"model":"fixture","sources":["google","openlibrary"]})
+            fields=curation.book_fields(db,self.book)
+            db.execute("UPDATE books SET author='Fictional Author' WHERE id=?",(self.book,))
+            job=db.execute("INSERT INTO review_jobs VALUES(NULL,'running','')").lastrowid
+        hit=dict(title=fields["title"],author="Fictional Author",series="Catalogue A",source="google")
+        hits=[hit,hit|{"series":"Catalogue B","source":"openlibrary"}]
+        proposal=dict(kind="metadata",field="publisher",value="Unsupported",evidence="0")
+        with patch.object(curation.metadata,"search",return_value={"matches":hits}),patch.object(curation,"infer",return_value=[proposal]):
+            curation.run_job(self.lib,job,c,1,[self.book],["metadata","series"],auto_apply=True)
+        with self.lib.db() as db:
+            self.assertEqual({r[0] for r in db.execute("SELECT new FROM suggestions WHERE state='pending'")},{"Catalogue A","Catalogue B","Unsupported"})
+            self.assertFalse(db.execute("SELECT 1 FROM suggestions WHERE state='applied'").fetchone())
+
     def test_supported_provider_response_shapes(self):
         answer='{"suggestions":[]}'
         cases=[

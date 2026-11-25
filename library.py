@@ -355,6 +355,8 @@ class Library:
                 VALUES((SELECT max(coalesce(max(id),0),coalesce((SELECT CAST(value AS INTEGER) FROM server_settings WHERE key='retired_edition'),0))+1 FROM editions),?,?,?)""",
                 (book,folder.name,info["cover"])).lastrowid
             db.execute("UPDATE books SET edition=?,category=? WHERE id=?",(file,category,book))
+            if category!="podcast" and curation.config(db).get("autoImports"):
+                db.execute("INSERT OR IGNORE INTO auto_review_queue(edition,book) VALUES(?,?)",(file,book))
             if podcast and podcast.get("subscription"):
                 from podcasts import prune
                 prune(db,podcast["feed"],podcast["order"])

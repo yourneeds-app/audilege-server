@@ -1,8 +1,12 @@
-# Audilege Server 0.4.6
+# Audilege Server 0.4.7
 
 Keep ebooks, audiobooks, synchronized read-along editions and subscribed podcasts on your own computer. A profile shares positions between the web reader and Audilege for Android. BookOrbit can be used through a separate app profile.
 
-## Upgrade to 0.4.6
+## Upgrade to 0.4.7
+
+Audiobooks and podcasts continue playing while browsing the library, title details, statistics and settings. A compact player offers artwork, title and playback control. Single-section podcasts omit redundant chapter and filename information.
+
+Library reviews can fill missing fields from title folders and selected catalogues. Matching titles and authors identify series and volumes. Edition-specific details such as year and publisher require a matching ISBN. Uncertain changes remain available for review, and applied changes can be undone. An administrator can enable automatic review of new book imports in “AI provider & model”. Selected catalogues receive search queries, and an enabled model receives comparison data.
 
 The web reader fits centered pages to the window height. Wide windows show two columns and smaller windows one. Page controls stay visible. When creating a read-along edition, a unique scanned companion in the same title folder is preselected. Multiple candidates are offered for manual selection.
 
@@ -30,7 +34,7 @@ Search for titles, authors, series or genres from the main navigation. Open a bo
 
 ## Administration
 
-Library checks can use Ollama, OpenAI, Anthropic, Gemini or a compatible endpoint. An administrator selects the provider, model, scope and catalogues. Running a check sends catalogue metadata from the selected titles and nearby matches to that model. Review each suggested change before applying it. A saved API key belongs to its configured endpoint. For a compatible provider using environment variables, set both `AUDILEGE_AI_KEY` and `AUDILEGE_AI_ENDPOINT`.
+Library checks can use Ollama, OpenAI, Anthropic, Gemini or a compatible endpoint. An administrator selects the provider, model, scope and catalogues. Running a check with AI enabled sends catalogue metadata from the selected titles and nearby matches to that model. A saved API key belongs to its configured endpoint. For a compatible provider using environment variables, set both `AUDILEGE_AI_KEY` and `AUDILEGE_AI_ENDPOINT`.
 
 For account recovery, configure SMTP with STARTTLS and the public HTTPS address. Supply the SMTP password through `AUDILEGE_SMTP_PASSWORD`. Users must verify their email address. A reset link expires after 20 minutes.
 

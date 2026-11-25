@@ -2,7 +2,7 @@
 const $ = id => document.getElementById(id);
 const categories = {audio:tr("Hörbücher"),audilege:"Audilege",ebook:"E-Books",podcast:"Podcasts"};
 const media = $("audio");
-let books=[], subscriptions=[], category="", current=null, publication=null, position=null, chapter=0, cues=[], cueIndex=-1;
+let books=[], subscriptions=[], category="", current=null, detailBook=null, publication=null, position=null, chapter=0, cues=[], cueIndex=-1;
 let convertBook=null, absData=null, timer=null, saveQueue=Promise.resolve(), activeSpans=[];
 let loadedAudio="",loadedChapter=-1, loading=false, generation=0, dirty=false, pendingSeek=null, segmentStart=null;
 let anchorNodes=new Map(),sentenceNodes=new Map(),frame=0;
@@ -28,9 +28,9 @@ function show(id){for(const k of ["shelf","reader","statistics","users","profile
   for(const [k,v] of [["libraryNav",id==="shelf"||id==="reader"],["statsNav",id==="statistics"],["usersNav",id==="users"]]){
     if(v)$(k).setAttribute("aria-current","page");else $(k).removeAttribute("aria-current");
   }
-  message("");
+  message("");updateMiniPlayer();
 }
-async function home(){readerRequest++;await closeReader();show("shelf");await refresh();}
+async function home(){await leaveReader();show("shelf");await refresh();}
 let refreshSequence=0;
 async function refresh(initial=false){
   const sequence=++refreshSequence;
@@ -157,10 +157,10 @@ function configure(){
 $("type").onchange=()=>{$("files").value="";configure();};
 $("add").onclick=()=>imports();
 $("convert").onclick=async()=>{
-  const book=current,button=$("convert");button.disabled=true;
+  const book=detailBook,button=$("convert");button.disabled=true;
   try{
     const editions=await api("web/books/"+book.id+"/companions");
-    if(current===book&&!$("reader").hidden)imports(book,editions);
+    if(detailBook===book&&!$("reader").hidden)imports(book,editions);
   }catch(error){hint(error);}finally{button.disabled=false;}
 };
 $("importForm").onsubmit=async e=>{
@@ -183,7 +183,7 @@ function duration(sec){
 }
 function progressText(p){return p==null?"":Math.round(100*p)+" %";}
 async function statistics(){
-  await closeReader();show("statistics");
+  await leaveReader();show("statistics");
   const s=await api("web/statistics"),body=$("statsBody");body.replaceChildren();
   function section(title,rows){if(!rows.length)return;body.append(el("h2",title));const panel=el("div",null,"panel");body.append(panel);
     for(const [name,value] of rows){const row=el("div",null,"row");row.append(el("span",name),el("strong",value));panel.append(row);}
@@ -293,12 +293,33 @@ function recordListening(){
   const sessionId=Array.from(crypto.getRandomValues(new Uint32Array(4))).join("-");
   api("api/v1/books/files/"+publication.fileId+"/sessions","POST",{sessionId,startedAt:new Date(start).toISOString(),endedAt:new Date(end).toISOString(),durationSeconds:seconds,sessionType:"listen"}).catch(hint);
 }
+function playerVisible(){return !$("reader").hidden&&!$("activeBook").hidden;}
+function updateMiniPlayer(){
+  const bar=$("miniPlayer");
+  bar.hidden=!publication||!current||isPaged()||loading||playerVisible();
+  if(bar.hidden)return;
+  if(bar.dataset.book!==String(current.id)){
+    $("miniArt").replaceChildren(cover(current,"audio"));bar.dataset.book=String(current.id);
+  }
+  $("miniTitle").textContent=current.title;
+  $("miniTitle").title=tr("Wiedergabe")+" · "+current.title;
+  const label=media.paused?tr("Abspielen"):"Pause";
+  $("miniPlay").setAttribute("aria-label",label);$("miniPlay").title=label;
+  $("miniPlay").textContent=media.paused?"▶":"Ⅱ";
+}
+function leaveReader(){
+  if(publication&&!isPaged()&&!loading)return;
+  readerRequest++;
+  return closeReader();
+}
 async function closeReader(){
   if(!current)return;
   resetReadingTools();
   resetDock();finishReadSession();
-  recordListening();media.pause();await queueProgress();generation++;publication=null;current=null;loadedAudio="";loadedChapter=-1;pendingSeek=null;
+  recordListening();media.pause();const saved=queueProgress();generation++;publication=null;current=null;loadedAudio="";loadedChapter=-1;pendingSeek=null;
   media.removeAttribute("src");media.load();activeSpans=[];loading=false;
+  updateMiniPlayer();
+  await saved;
 }
 function renderText(){
   const node=$("text"),s=section();node.replaceChildren();activeSpans=[];node.lang=publication.language;
@@ -327,7 +348,7 @@ function highlight(){
   const sentenceGroup=sentenceNodes.get(target.dataset.sentence);
   activeSpans=sentenceCue || ($("mode").value==="sentence" && sentenceGroup) || word;
   for(const n of activeSpans)n.classList.add("current");
-  if(readerMode==="along"&&!media.paused&&followPassage){const r=target.getBoundingClientRect();if(r.top<100||r.bottom>innerHeight-80)target.scrollIntoView({block:"center",behavior:"instant"});}
+  if(playerVisible()&&readerMode==="along"&&!media.paused&&followPassage){const r=target.getBoundingClientRect();if(r.top<100||r.bottom>innerHeight-80)target.scrollIntoView({block:"center",behavior:"instant"});}
 }
 $("mode").value=localStorage.getItem("audilege-mark")||"word";
 $("mode").onchange=()=>{localStorage.setItem("audilege-mark",$("mode").value);highlight();};
@@ -389,18 +410,31 @@ $("chapter").onchange=()=>{const playing=!media.paused;setChapter(Number($("chap
 $("text").onclick=e=>{if(!e.target.dataset?.anchor)return;let i=cues.findIndex(q=>q.anchor===e.target.dataset.anchor);
   if(i<0 && e.target.dataset.sentence)i=cues.findIndex(q=>q.anchor===e.target.dataset.sentence);
   if(i>=0){setCue(i,0,!media.paused);dirty=true;queueProgress();}};
-async function openReader(book,resume=false,requestedMode=null){
-  const request=++readerRequest;
-  await closeReader();if(request!==readerRequest)return;
-  current=book;show("reader");$("reader").dataset.category=book.category;
+function displayBook(book,active){
+  detailBook=book;$("reader").dataset.category=book.category;
   $("readerTitle").textContent=book.title;$("author").textContent=book.authors.map(a=>a.name).join(", ");
   $("convert").hidden=!["audio","ebook"].includes(book.category);
   $("download").hidden=!["ebook","audilege"].includes(book.category);
   $("download").href="api/v1/books/files/"+book.files[0].id+"/download";
-  configureBook();
-  $("reader").dataset.mode="detail";$("detailHero").hidden=false;$("activeBook").hidden=true;$("readerModes").hidden=true;
-  $("back").textContent=category==="podcast"?"← Podcasts":tr("← Bibliothek");
-  if(!resume)return;
+  configureBook(book);
+  $("reader").dataset.mode=active?readerMode:"detail";$("detailHero").hidden=active;$("activeBook").hidden=!active;$("readerModes").hidden=!active;
+  $("back").textContent=active?(book.category==="podcast"?tr("← Folgendetails"):tr("← Buchdetails")):category==="podcast"?"← Podcasts":tr("← Bibliothek");
+  show("reader");
+}
+async function openReader(book,resume=false,requestedMode=null,background=false){
+  if(!resume){
+    await leaveReader();displayBook(book,false);return;
+  }
+  if(publication&&!loading&&current?.id===book.id){
+    displayBook(current,true);
+    if(requestedMode&&requestedMode!==readerMode)await changeMode(requestedMode);
+    else if(!isPaged())syncMode(0);
+    return;
+  }
+  const request=++readerRequest;
+  await closeReader();if(request!==readerRequest)return;
+  current=book;
+  if(!background)displayBook(book,false);
   const pub=await api("web/editions/"+book.id);
   if(request!==readerRequest)return;
   const row=(await api("api/v1/reading-progress?fileId="+pub.fileId)).items[0];
@@ -408,7 +442,7 @@ async function openReader(book,resume=false,requestedMode=null){
   loading=true;publication=pub;position=row;dirty=false;
   const recentText=row.text.updatedAt && (!row.narration.updatedAt||row.text.updatedAt>row.narration.updatedAt);
   readerMode=requestedMode||(book.category==="audilege"?(recentText?"read":"along"):book.category==="ebook"?"read":"listen");
-  $("detailHero").hidden=true;$("activeBook").hidden=false;$("readerModes").hidden=false;$("back").textContent=tr("← Buchdetails");
+  if(!background)displayBook(book,true);
   $("chapter").replaceChildren(...pub.sections.map((s,i)=>new Option(s.name,String(i))));
   let index=row.narration.sectionIndex??Math.floor(row.percentage*pub.sections.length/100);
   if(recentText){
@@ -433,11 +467,15 @@ async function openReader(book,resume=false,requestedMode=null){
     setCue(i,recentText?0:fromSeconds>.02?fromSeconds:Math.max(0,fromFraction));
   }
   loading=false;
+  updateMiniPlayer();
   if(isPaged())syncMode(recentText?fromText:model?.anchors.get(cues[cueIndex]?.anchor)??0);
 }
 setInterval(()=>{if(!media.paused){queueProgress();recordListening();segmentStart=Date.now();}},5000);
 document.addEventListener("visibilitychange",()=>{if(document.hidden){queueProgress();recordListening();if(!media.paused)segmentStart=Date.now();}});
-$("back").onclick=()=>($("detailHero").hidden&&current?openReader(current):home()).catch(hint);
+$("back").onclick=()=>(playerVisible()&&current?openReader(current):home()).catch(hint);
+$("miniTitle").onclick=()=>{if(current)openReader(current,true).catch(hint);};
+$("miniPlay").onclick=()=>{if(media.paused)media.play().catch(hint);else media.pause();};
+for(const event of ["play","pause"])media.addEventListener(event,updateMiniPlayer);
 function resetShelf(){shelfPage="library";facetValue="";category="";discovering=false;podcastFilter="";allEpisodes=false;$("bookSearch").value="";}
 $("libraryNav").onclick=()=>{resetShelf();home().catch(hint);};
 $("folderBack").onclick=()=>{resetShelf();renderShelf();};
