@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.tmp
+*.sqlite*
+*.epub
+*.apk
+.env
+.venv/
+private/
+dist/
+build/
+node_modules/

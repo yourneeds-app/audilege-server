@@ -1,0 +1,53 @@
+:root[data-theme=light]{color-scheme:light;--page:#fbfaf8;--aside:#f3f2ef;--card:#fff;--ink:#20231f;--muted:#62645f;--accent:#504573;--tint:#e9e6f1;--line:#deded9;--word:#ded4ec;--active:#dcd5e9}
+:root[data-theme=dark]{color-scheme:dark;--page:#191c1d;--aside:#202425;--card:#222627;--ink:#eeeae7;--muted:#bcb8b4;--line:#3d4243;--tint:#403432;--accent:#efb5a2;--active:#57413d;--word:#674d43}
+[data-theme=light] .wordmark{filter:none}[data-theme=dark] .wordmark{filter:invert(.95)}
+.shell{display:grid;grid-template-columns:minmax(0,1fr);align-items:start}
+.shell.drawerOpen{grid-template-columns:14.5rem minmax(0,1fr)}
+.shell:not(.drawerOpen) aside{display:none}
+#menuToggle{position:fixed;z-index:12;left:.65rem;top:.65rem;width:2.65rem;height:2.65rem;padding:0;border-radius:.8rem;background:var(--aside);font-size:1.2rem}
+.shell aside#sidebar{display:none;flex-flow:column nowrap;align-items:stretch;justify-content:start;position:sticky;top:0;height:100dvh;overflow:auto;padding:4.2rem .85rem 1rem;background:var(--aside)}
+.drawerOpen aside#sidebar{display:flex}
+#sidebar nav,#sidebar .profile{position:static;display:grid;text-align:left;gap:.25rem;justify-content:stretch}
+#sidebar .profile{margin-top:auto;border-top:1px solid var(--line);padding:.65rem 0 0}
+#sidebar button,#sidebar summary{display:flex;align-items:center;justify-content:flex-start;gap:.7rem;padding:.65rem .85rem;text-align:left;width:100%;border:0;border-radius:.75rem;background:transparent;font-size:.95rem;min-height:2.65rem;font-weight:550}
+#sidebar button:hover,#sidebar summary:hover{background:var(--card)}
+#sidebar [aria-current=page]{background:var(--tint);color:var(--accent)}
+#sidebar #profileNav{display:grid;gap:0}#profileNav small{font-weight:400}
+#sidebar #categoryNav summary{cursor:pointer}#categoryNav summary:after{content:"⌄";margin-left:auto}
+#sidebar #categoryNav button{padding-left:2.2rem}
+.shell .page{min-width:0;padding-top:clamp(3.7rem,6vw,5rem)}
+#backdrop{position:fixed;inset:0;z-index:9;border:0;border-radius:0;background:#12121780}
+.prefGroup,.yearPanel{max-width:62rem}.prefGroup{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(13rem,100%),1fr));gap:.8rem 1.4rem}
+.prefGroup h2{grid-column:1/-1}.prefGroup label{margin:0}
+.coverStage{padding:0;background:none;overflow:hidden;justify-self:center;width:fit-content;max-width:100%;border-radius:.55rem}
+.coverStage img.art{filter:none}
+#detailArt img.art{height:auto;width:auto;max-height:23rem;max-width:100%;border-radius:inherit}
+.playerArt.coverStage{width:min(100%,24rem);aspect-ratio:1}
+.playerArt.coverStage img.art,#reader[data-category=podcast] #detailArt img.art{margin:0;width:100%;height:100%;aspect-ratio:1;object-fit:cover;border-radius:inherit}
+.podTile img.art,.episodeRow img.art{object-fit:cover}
+#pageText,#reader[data-mode=along] #text{font:var(--book-size,1.15rem)/var(--book-leading,1.7) var(--book-font,Georgia,serif);white-space:normal;text-align:start;letter-spacing:normal}
+.paper,#reader[data-mode=along] #text{padding:var(--book-margin,1.5rem);margin-inline:auto;max-width:48rem}
+#pageText p,#text p{margin:0 0 .9em;text-indent:0}article h1,article h2,article h3{break-after:avoid;font:650 1.35em/1.3 var(--book-font,Georgia,serif);letter-spacing:normal}
+[data-flow=scroll] #pageWindow{overflow-y:auto;overscroll-behavior:contain}
+[data-flow=scroll] #pageText{column-width:auto!important;column-count:auto;height:auto}
+.shell:not(.drawerOpen) #reader[data-mode=along] #player{left:50%}
+.statCards,.weeklySummary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}
+.statCard{border:1px solid var(--line);border-radius:1rem;padding:clamp(.7rem,2vw,1.4rem);display:flex;flex-direction:column;justify-content:center;gap:.25rem;background:var(--card);font-variant-numeric:tabular-nums}
+.statCard strong{font-size:clamp(1.25rem,3.5vw,2.7rem);line-height:1.1;letter-spacing:-.045em}.statCard span,.weekBars small,.weekBars span{font-size:.83rem;color:var(--muted)}
+.activitySplit{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}.activitySplit .panel{margin:0;min-width:0}
+.weekBars{display:flex;gap:.5rem;height:10.5rem;margin:1.2rem 0}.weekBars>div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:.35rem}
+.weekBars i{background:var(--accent);width:min(70%,2rem);min-height:1px;border-radius:.3rem .3rem 0 0}
+.weeklySummary .statCard{border:0;border-top:1px solid var(--line);border-radius:0;padding:.8rem 0 0}.weeklySummary strong{font-size:1.05rem}
+.recentList .row{align-items:center;font-size:.9rem}.recentList .row>div{min-width:0;overflow-wrap:anywhere}.recentList .row>span{white-space:nowrap;color:var(--muted)}.recentList small{display:block}
+.yearPanel header{margin:0;align-items:center}.yearPanel h2{margin:0}.yearPanel p{color:var(--muted)}
+.calendarScroll{overflow-x:auto}.yearMonths,.yearGrid{min-width:36rem}.yearMonths{display:grid;grid-template-columns:repeat(12,1fr);font-size:.75rem;color:var(--muted)}
+.yearGrid{display:grid;grid-template-rows:repeat(7,auto);grid-template-columns:repeat(54,minmax(0,1fr));grid-auto-flow:column;gap:2px;margin-top:.4rem}
+.yearGrid i{aspect-ratio:1;border-radius:2px}.heat{background:var(--line)}.heat[data-level="1"]{background:color-mix(in srgb,var(--accent) 30%,var(--line))}.heat[data-level="2"]{background:color-mix(in srgb,var(--accent) 50%,var(--line))}.heat[data-level="3"]{background:color-mix(in srgb,var(--accent) 75%,var(--line))}.heat[data-level="4"]{background:var(--accent)}
+@media(max-width:760px){
+ .shell,.shell.drawerOpen{display:block}.shell.drawerOpen aside#sidebar{display:flex;position:fixed;inset:0 auto 0 0;z-index:10;width:min(19rem,85vw);padding-top:4.2rem}
+ .shell .page,.shell:has(#reader:not([hidden])) .page{padding:3.9rem 1rem 1.75rem}
+ #reader[data-mode=along] #player{left:50%;width:min(36rem,calc(100% - 1.2rem))}
+ #reader[data-mode=along] #player:has(#showDock:not([hidden])){width:auto}
+ .activitySplit{grid-template-columns:1fr}.shelfTools .filters{flex:1 1 100%}.statCards{gap:.4rem}.statCard span{font-size:.76rem}
+ .playerArt.coverStage{width:min(88%,18rem)}#detailArt img.art{max-height:17rem}
+}
