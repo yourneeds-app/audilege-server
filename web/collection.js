@@ -98,7 +98,13 @@ function renderStart(box){
   if(columns.children.length)box.append(columns);
   if(!box.children.length)box.append(el("p",tr("Deine Bibliothek ist leer.")));
 }
+function updateSearchVisibility(){
+  const librarySearch = shelfPage==="library" && !discovering && !podcastFilter;
+  $("globalTools").hidden = $("shelf").hidden || !(shelfPage==="start" || librarySearch);
+}
 function renderCollection(){
+  updateSearchVisibility();
+  if ($("globalTools").hidden) $("bookSearch").value="";
   const term=$("bookSearch").value.trim(),box=$("books");
   const sortKey="audilege-sort:"+[shelfPage,category,podcastFilter,facetValue,Boolean(term),discovering].join("/");
   if($("shelfSort").dataset.key!==sortKey){$("shelfSort").dataset.key=sortKey;$("shelfSort").value=localStorage.getItem(sortKey)||(shelfPage==="series"&&facetValue?"series":localStorage.getItem("audilege-sort"))||"new";}
@@ -153,10 +159,10 @@ for(const [id,[label,symbol]] of Object.entries(navIcons)){
   const b=$(id);b.title=label;b.setAttribute("aria-label",label);b.dataset.symbol=symbol;
 }
 for(const b of [$("libraryNav"),$("statsNav"),$("usersNav"),$("discoverNav")]){b.title=b.textContent;b.setAttribute("aria-label",b.textContent);}
-$("bookSearch").oninput=()=>{if($("shelf").hidden){show("shelf");}renderShelf();};
+search.oninput=()=>{if(!globalTools.hidden)renderShelf();};
 document.addEventListener("keydown",e=>{
-  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"&&!$("shell").hidden&&!document.querySelector("dialog[open]")){
-    e.preventDefault();(async()=>{if($("shelf").hidden){await leaveReader();show("shelf");}search.focus();search.select();})().catch(hint);
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"&&!$("shell").hidden&&!globalTools.hidden&&!document.querySelector("dialog[open]")){
+    e.preventDefault();search.focus();search.select();
   }
   if(e.key==="Escape"&&document.activeElement===search){search.value="";renderShelf();}
 });

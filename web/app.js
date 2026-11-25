@@ -23,7 +23,7 @@ async function api(path,method="GET",data){
   return v;
 }
 function show(id){for(const k of ["shelf","reader","statistics","users","profileView","settingsView"])$(k).hidden=k!==id;
-  $("globalTools").hidden=id==="reader";
+  updateSearchVisibility();
   if(narrowScreen.matches)setDrawer(false);
   for(const [k,v] of [["libraryNav",id==="shelf"||id==="reader"],["statsNav",id==="statistics"],["usersNav",id==="users"]]){
     if(v)$(k).setAttribute("aria-current","page");else $(k).removeAttribute("aria-current");
