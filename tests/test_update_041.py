@@ -20,6 +20,31 @@ class UpdateTests(unittest.TestCase):
     tearDown=test_server.ServerTest.tearDown
     call=test_server.ServerTest.call
 
+    def test_pair_scanned_epub_with_audio_folder(self):
+        with TemporaryDirectory() as tmp, patch("media_tools.shutil.which",return_value=None):
+            inbox=Inbox(self.lib)
+            folder=Path(tmp)/"Author"/"Example Series"/"Vol 14 - Fiction"
+            folder.mkdir(parents=True)
+            with wave.open(str(folder/"Chapter.wav"),"wb") as wav:
+                wav.setparams((1,2,8000,0,"NONE","NONE"))
+                wav.writeframes(bytes(16000))
+            ebook=folder/"Another filename.epub"
+            ebook.write_bytes(test_server.epub())
+            for p in folder.iterdir():os.utime(p,(1600000000,1600000000))
+            inbox.change_linked(tmp)
+            inbox.scan();inbox.scan()
+            ids={b["category"]:b["id"] for b in self.call("/web/library")["books"]}
+            url=f"/web/books/{ids['audio']}/companions"
+            self.assertEqual(self.call(url)["suggested"],ids["ebook"])
+            self.assertEqual(self.call(f"/web/books/{ids['ebook']}/companions")["suggested"],ids["audio"])
+            second=folder/"Second edition.epub"
+            second.write_bytes(ebook.read_bytes());os.utime(second,(1600000000,1600000000))
+            inbox.scan();inbox.scan()
+            result=self.call(url)
+            self.assertIsNone(result["suggested"])
+            self.assertEqual(sum(x["sameFolder"] for x in result["choices"]),2)
+            self.call("/web/align",{"book":ids["audio"],"companion":ids["ebook"],"files":[],"language":"de"})
+
     def test_rescan_groups_numbered_discs_and_moves_each_profiles_position(self):
         with TemporaryDirectory() as tmp, patch("media_tools.shutil.which",return_value=None):
             root=Path(tmp)
@@ -128,7 +153,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn('method="post" action="web/login"',html)
         self.assertNotRegex(html,r'(src|href)="/')
         self.assertEqual(html.count("<script"),1)
-        bundle=self.call("/audilege-ui.js?v=0.4.5",raw=True)[2]
+        bundle=self.call("/audilege-ui.js?v=0.4.6",raw=True)[2]
         self.assertLess(bundle.index(b"function tr("),bundle.index(b"const categories ="))
         credentials={"username":"eins","password":"test-fixture-1","cookiePath":"/medien/audilege/"}
         origin={"Origin":"https://school.example","Host":"school.example"}

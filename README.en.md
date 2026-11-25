@@ -1,8 +1,10 @@
-# Audilege Server 0.4.5
+# Audilege Server 0.4.6
 
 Keep ebooks, audiobooks, synchronized read-along editions and subscribed podcasts on your own computer. A profile shares positions between the web reader and Audilege for Android. BookOrbit can be used through a separate app profile.
 
-## Upgrade to 0.4.5
+## Upgrade to 0.4.6
+
+The web reader fits centered pages to the window height. Wide windows show two columns and smaller windows one. Page controls stay visible. When creating a read-along edition, a unique scanned companion in the same title folder is preselected. Multiple candidates are offered for manual selection.
 
 Sort the web library by series or storage location in either direction. Volumes within each series stay in reading order. Select “Show series” to display series names and available volume numbers on book cards. Sorting by location shows scanned titles’ relative source paths. For a folder layout such as `Author/Series/Vol 02 - Title`, the web library fills missing series and volume information from the path. Existing metadata takes priority.
 

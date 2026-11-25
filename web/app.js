@@ -116,18 +116,30 @@ setInterval(async()=>{
     if(JSON.stringify(revision)!==shelfRevision)await refresh();
   }catch(e){hint(e);}
 },15000);
-function imports(b=null){
+function imports(b=null,editions={choices:[],suggested:null}){
   convertBook=b;$("importForm").reset();$("importStatus").textContent="";$("importGo").disabled=false;
   $("rssOption").hidden=!account?.is_admin;resetFeed();
   $("importTitle").textContent=b?tr("Audilege-Fassung erstellen"):tr("Titel hinzufügen");
   $("typeLabel").hidden=!!b;$("langLabel").hidden=!b;configure();$("importDialog").showModal();
-  const matches=b?books.filter(other=>other.category===(b.category==="ebook"?"audio":"ebook")):[];
-  $("companion").replaceChildren(new Option(tr("Datei hochladen"),""),...matches.map(other=>new Option(other.title+" · "+other.authors.map(a=>a.name).join(", "),other.id)));
-  $("companionLabel").hidden=!matches.length;$("companion").value="";sourceChoice();
+  const matches=editions.choices,select=$("companion");
+  select.replaceChildren(new Option(tr("Datei hochladen"),""));
+  for(const sameFolder of [true,false]){
+    const group=document.createElement("optgroup");
+    group.label=tr(sameFolder?"Im selben Ordner":"Weitere Ausgaben");
+    for(const item of matches.filter(item=>item.sameFolder===sameFolder)){
+      group.append(new Option([item.title,item.author].filter(Boolean).join(" · "),item.id));
+    }
+    if(group.children.length)select.append(group);
+  }
+  $("companionLabel").hidden=!matches.length;
   const preferred=libraryLinks.find(r=>r.kind==="companion"&&(r.book===b?.id||Number(r.target)===b?.id));
-  if(preferred){const other=preferred.book===b.id?Number(preferred.target):preferred.book;if(matches.some(x=>x.id===other)){$("companion").value=String(other);sourceChoice();}}
+  const other=preferred&&(preferred.book===b.id?Number(preferred.target):preferred.book);
+  const chosen=matches.some(x=>x.id===other)?other:editions.suggested;
+  if(!chosen&&matches.some(x=>x.sameFolder))select.prepend(new Option(tr("Ausgabe auswählen"),"choose",true,true));
+  else select.value=chosen?String(chosen):"";
+  sourceChoice();
 }
-function sourceChoice(){const file=!$("companion").value;$("files").required=file;$("files").parentElement.hidden=!file;
+function sourceChoice(){const file=!$("companion").value;$("importGo").disabled=$("companion").value==="choose";$("files").required=file;$("files").parentElement.hidden=!file;
   $("fileOrder").hidden=!file;if(!file)$("files").value="";}
 $("companion").onchange=sourceChoice;
 function configure(){
@@ -144,7 +156,13 @@ function configure(){
 }
 $("type").onchange=()=>{$("files").value="";configure();};
 $("add").onclick=()=>imports();
-$("convert").onclick=()=>imports(current);
+$("convert").onclick=async()=>{
+  const book=current,button=$("convert");button.disabled=true;
+  try{
+    const editions=await api("web/books/"+book.id+"/companions");
+    if(current===book&&!$("reader").hidden)imports(book,editions);
+  }catch(error){hint(error);}finally{button.disabled=false;}
+};
 $("importForm").onsubmit=async e=>{
   if(!convertBook&&$("type").value==="rss"){e.preventDefault();await importFeed();return;}
   e.preventDefault();$("importGo").disabled=true;

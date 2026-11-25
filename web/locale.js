@@ -11,6 +11,7 @@ Object.assign(strings,{
   "Speicherort A–Z":"Storage location A–Z", "Speicherort Z–A":"Storage location Z–A",
   "Reihe anzeigen":"Show series", "Sammlung":"Collection", "Quellordner":"Source folder",
   "Serverbibliothek":"Server library",
+  "Im selben Ordner":"In the same folder", "Weitere Ausgaben":"Other editions", "Ausgabe auswählen":"Choose an edition",
   "In Warteschlange": "Queued",
   "Abgleich wird gestartet": "Starting alignment",
   "Dateien prüfen …": "Checking files …",

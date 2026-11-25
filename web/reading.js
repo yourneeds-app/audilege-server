@@ -92,8 +92,13 @@ function firstOffset(page) {
 }
 function positionPage(offset){
   const view=$("pageWindow");if(!view.clientWidth)return;
-  $("pageText").style.columnWidth=view.clientWidth+"px";
-  pageCount=scrollReading()?Math.max(1,Math.ceil(view.scrollHeight/view.clientHeight)):Math.max(1,Math.round((view.scrollWidth+24)/pageStep()));
+  const text=$("pageText"),scroll=scrollReading();
+  const columns=!scroll && view.clientWidth>=58*parseFloat(getComputedStyle(text).fontSize)?2:1;
+  text.style.columnWidth="auto";text.style.columnCount=scroll?"auto":String(columns);
+  text.classList.remove("padSpread");
+  const columnCount=Math.round((view.scrollWidth+24)*columns/pageStep());
+  if(columns===2&&columnCount>2&&columnCount%2)text.classList.add("padSpread");
+  pageCount=scroll?Math.max(1,Math.ceil(view.scrollHeight/view.clientHeight)):Math.max(1,Math.ceil(columnCount/columns));
   pageOffset=Math.max(0,Math.min(Number(offset)||0,Math.max(0,pageContent.length-1)));
   pageIndex=pageAt(pageOffset);
   if(scrollReading())view.scrollTop=offsetCoordinate(pageOffset);else view.scrollLeft=pageIndex*pageStep();

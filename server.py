@@ -103,6 +103,34 @@ def catalog(db,owner,book_id=None,start=False,storage_roots=None):
     return out
 
 
+def companion_choices(db, book):
+    row = db.execute("SELECT category FROM books WHERE id=? AND merged_into IS NULL", (book,)).fetchone()
+    if not row or row[0] not in ("audio", "ebook"):
+        raise ValueError("Ein E-Book oder Hörbuch auswählen.")
+    other_kind = "ebook" if row[0] == "audio" else "audio"
+    folders = {}
+    for source, bid, kind in db.execute("""SELECT s.source,b.id,b.category FROM scanned_media s
+            JOIN books b ON b.id=s.book WHERE b.merged_into IS NULL AND b.category IN ('ebook','audio')"""):
+        path = Path(source)
+        if kind == "audio" and path.suffix.lower() in AUDIO:
+            continue  # Loose audio files at the collection root do not identify a title folder.
+        folder = path.parent if kind == "ebook" else path
+        folders.setdefault(folder, {}).setdefault(kind, set()).add(bid)
+    nearby = set()
+    unambiguous = set()
+    for members in folders.values():
+        if book in members.get(row[0], ()):
+            candidates = members.get(other_kind, set())
+            nearby.update(candidates)
+            if len(candidates) == 1 and len(members[row[0]]) == 1:
+                unambiguous.update(candidates)
+    choices = [dict(r) for r in db.execute("""SELECT id,title,author FROM books
+        WHERE merged_into IS NULL AND category=? ORDER BY title COLLATE NOCASE,id""", (other_kind,))]
+    for choice in choices:
+        choice["sameFolder"] = choice["id"] in nearby
+    return {"choices": choices, "suggested": next(iter(nearby)) if nearby == unambiguous and len(nearby)==1 else None}
+
+
 def revision(db):
     return tuple(db.execute("""SELECT coalesce(max(id),0),count(*),
         (SELECT coalesce(max(id),0) FROM podcast_feeds),(SELECT count(*) FROM podcast_feeds),
@@ -471,6 +499,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.body()
                 self.lib.retry_job(owner,int(retry[1]))
                 return self.output({},202)
+            companion_route=re.fullmatch(r"/web/books/(\d+)/companions",path)
+            if companion_route and method=="GET":
+                return self.output(companion_choices(db,int(companion_route[1])))
             if path=="/web/library" and method=="GET":
                 db.execute("BEGIN")
                 jobs=[dict(r) for r in db.execute("SELECT j.id,j.book,b.title,j.state,j.note FROM jobs j JOIN books b ON j.book=b.id WHERE owner=? ORDER BY j.id DESC LIMIT 12",(owner,))]

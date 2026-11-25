@@ -1,8 +1,10 @@
-# Audilege Server 0.4.5
+# Audilege Server 0.4.6
 
 For Windows and Linux, with a German and English web interface. See [the English quick start](README.en.md) and the [release downloads](https://github.com/yourneeds-app/audilege-server/releases).
 
-## Update auf 0.4.5
+## Update auf 0.4.6
+
+Der Webreader passt die zentrierte Buchseite an die Fensterhöhe an. Breite Fenster zeigen zwei Textspalten, kleinere eine. Die Blättertasten bleiben sichtbar. Beim Erstellen einer Audilege-Fassung ist eine eindeutige, eingelesene Gegenausgabe im selben Titelordner vorausgewählt. Bei mehreren Ausgaben wählst du selbst.
 
 Im Webregal lässt sich nach Reihe oder Speicherort in beide Richtungen sortieren. Innerhalb einer Reihe folgen die Bände ihrer Nummer. „Reihe anzeigen“ blendet Reihennamen und vorhandene Bandnummern unter den Titeln ein. Bei der Sortierung nach Speicherort zeigen gescannte Titel ihren relativen Quellpfad. Bei einer Ordnerstruktur wie `Autor/Reihe/Vol 02 - Titel` ergänzt das Webregal fehlende Reihen- und Bandangaben aus dem Pfad. Vorhandene Angaben haben Vorrang.
 
