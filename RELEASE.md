@@ -1,7 +1,7 @@
 ## Deutsch
 
-Sprecher sind anklickbar. Die Bibliothek bietet Autor- und Reihensortierung sowie die Filter „Angefangen“ und „Abgeschlossen“. „Als Nächstes“ verwendet in Web und Android dieselbe Warteschlange pro Profil.
+Audilege synchronisiert Lesezeichen pro Profil und Ausgabe zwischen Android und Web. Vorhandene Web-Lesezeichen bleiben verfügbar. Die Android-App kann neue Folgen abonnierter Podcasts über WLAN herunterladen.
 
 ## English
 
-Narrators are clickable. The library offers sorting by author or series and filters for started or finished items. Web and Android share the Up next queue for each profile.
+Audilege syncs bookmarks by profile and edition between Android and the web. Existing web bookmarks remain available. The Android app can download new episodes of subscribed podcasts over Wi-Fi.

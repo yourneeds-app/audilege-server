@@ -185,7 +185,7 @@ def migrate_positions(lib,db,previous,file,book,info,disc_prefix=None):
                 seconds+=sum(c["end"]-c["begin"] for c in old[mark["chapter"]]["cues"][:mark["cue"]])
                 _,index,anchor=audio_at(seconds)
                 cue=next(i for i,c in enumerate(sections[index]["cues"]) if c["anchor"]==anchor)
-            db.execute("UPDATE bookmarks SET book=?,edition=?,chapter=?,offset=?,cue=? WHERE id=?",(book,file,index,offset,cue,mark["id"]))
+            db.execute("UPDATE bookmarks SET book=?,edition=?,chapter=?,offset=?,cue=?,cfi=NULL,anchor=NULL,audio_ms=NULL WHERE id=?",(book,file,index,offset,cue,mark["id"]))
         if e["book"]!=book:
             db.execute("INSERT OR IGNORE INTO player_items SELECT owner,?,kind,value FROM player_items WHERE book=?",(book,e["book"]))
             db.execute("DELETE FROM player_items WHERE book=?",(e["book"],))
@@ -221,6 +221,11 @@ class Library:
                 db.execute("ALTER TABLE books ADD COLUMN added_at TEXT")
             db.execute("""CREATE TRIGGER IF NOT EXISTS book_added_at AFTER INSERT ON books WHEN NEW.added_at IS NULL
                        BEGIN UPDATE books SET added_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=NEW.id; END""")
+            bookmark_columns={r[1] for r in db.execute("PRAGMA table_info(bookmarks)")}
+            for column,kind in (("client_id","TEXT"),("cfi","TEXT"),("anchor","TEXT"),("audio_ms","INTEGER")):
+                if column not in bookmark_columns:
+                    db.execute(f"ALTER TABLE bookmarks ADD COLUMN {column} {kind}")
+            db.execute("CREATE UNIQUE INDEX IF NOT EXISTS bookmark_client_id ON bookmarks(owner,client_id) WHERE client_id IS NOT NULL")
             job_columns={r[1] for r in db.execute("PRAGMA table_info(jobs)")}
             for column in ("started_at","phase_at","phase_progress"):
                 if column not in job_columns:

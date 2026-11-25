@@ -95,10 +95,26 @@ async function bookmarkSheet(){
   const state=await players(),box=sheet(tr("Lesezeichen")),file=publication.fileId;
   box.append(tool(tr("Stelle merken"),async()=>{
     const offset=isPaged()?pageOffset:(currentPassage?.anchors.get(cues[cueIndex]?.anchor)||0);
-    await players({kind:"bookmark",book:current.id,edition:file,chapter,offset,cue:isPaged()?-1:cueIndex,label:currentPassage?.content.slice(offset,offset+90)||section().name});await bookmarkSheet();
+    const audio=!isPaged()&&cues.length>0;
+    await players({kind:"bookmark",book:current.id,edition:file,chapter,offset,cue:audio?cueIndex:-1,
+      cfi:cfiAt(offset),anchor:audio?cues[cueIndex]?.anchor:null,audio_ms:audio?Math.round((offsetOf(cueIndex)+within())*1000):null,
+      label:currentPassage?.content.slice(offset,offset+90)||section().name});await bookmarkSheet();
   }));
   for(const m of state.marks.filter(m=>m.book===current.id)){
-    const pick=tool(m.label,async()=>{studio.close();await locate(m.chapter,m.offset,m.cue);});pick.disabled=m.edition!==file;
+    const pick=tool(m.label,async()=>{
+      studio.close();
+      const pub=publication,b=current,model=await getPassage(pub,m.chapter,b);
+      if(pub!==publication)return;
+      const offset=(m.anchor?model?.anchors.get(m.anchor):null)??(m.cfi?fromCfi(model,m.cfi):null)??m.offset;
+      const clips=pub.sections[m.chapter].cues;
+      let cue=m.cue,time=0;
+      if(m.audio_ms!=null&&clips.length){
+        const position=m.audio_ms/1000,times=cueTimes(clips);
+        cue=Math.max(0,times.slice(0,-1).findLastIndex(start=>start<=position));
+        time=position-times[cue];
+      }
+      await locate(m.chapter,offset,cue,true,time);
+    });pick.disabled=m.edition!==file;
     box.append(line(pick,tool(tr("Entfernen"),async()=>{await players({book:current.id,kind:"bookmark",remove:m.id});await bookmarkSheet();})));
   }
 }

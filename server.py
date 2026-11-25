@@ -35,7 +35,7 @@ from activity import merged
 import maintenance
 
 
-def catalog(db,owner,book_id=None,start=False,storage_roots=None,show_editions=False):
+def catalog(db,owner,book_id=None,start=False,storage_roots=None,show_editions=False,subscribed_podcasts=False):
     out = []
     locations = {}
     where="";args=[owner,owner,book_id,book_id]
@@ -46,6 +46,8 @@ def catalog(db,owner,book_id=None,start=False,storage_roots=None,show_editions=F
             WHERE b.merged_into IS NULL AND p.owner=? AND json_extract(p.data,'$.percentage')<100
             ORDER BY json_extract(p.data,'$.updatedAt') DESC LIMIT 3))"""
         args.append(owner)
+    if subscribed_podcasts:
+        where+=" AND b.category='podcast' AND pf.id IS NOT NULL"
     storage_column = """(SELECT coalesce(s.display_source,s.source) FROM scanned_media s WHERE s.book=b.id
         AND NOT EXISTS (SELECT 1 FROM readalong_exports x WHERE x.edition=b.edition AND lower(x.path)=lower(s.source))
         ORDER BY s.source LIMIT 1) AS storage_source,"""
@@ -597,10 +599,25 @@ class Handler(BaseHTTPRequestHandler):
                 rows=catalog(db,owner,storage_roots=self.catalog_roots(),show_editions=True)
                 if data.get("filter"):
                     rows=sorted((b for b in rows if 0<b["readingProgress"]<100),key=lambda b:b["updatedAt"],reverse=True)
-                return self.output(dict(items=rows[page*size:(page+1)*size],total=len(rows),sharedQueue=True))
+                return self.output(dict(items=rows[page*size:(page+1)*size],total=len(rows),sharedQueue=True,sharedBookmarks=True))
             if path=="/api/v1/dashboard/scrollers/continue-reading" and method=="GET":
                 rows=sorted((b for b in catalog(db,owner) if 0<b["readingProgress"]<100),key=lambda b:b["updatedAt"],reverse=True)
                 return self.output({"books":rows[:50],"total":len(rows)})
+            if path=="/api/v1/podcasts/autodownload" and method=="GET":
+                episodes=sorted(catalog(db,owner,subscribed_podcasts=True),
+                                key=lambda book: ((book.get("podcast") or {}).get("published") or 0,book["id"]),
+                                reverse=True)
+                newest={}
+                for book in episodes:
+                    newest.setdefault(book["podcast"]["key"],book)
+                return self.output({"items":[book for book in newest.values()
+                                             if not book["played"] and book["readingProgress"]<100]})
+            marks=re.fullmatch(r"/api/v1/books/(\d+)/bookmarks",path)
+            if marks and method in ("GET","POST"):
+                data=self.body() if method=="POST" else None
+                result=maintenance.sync_bookmarks(db,owner,int(marks[1]),int(param("fileId")),data)
+                db.commit()
+                return self.output(result)
             if path=="/api/v1/reading-progress":
                 if method=="GET":
                     return self.output({"items":[get_progress(db,owner,int(param("fileId")))]})

@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request,urlopen
 from zipfile import ZipFile
 
-VERSION="0.4.16"
+VERSION="0.4.17"
 REPO="https://github.com/yourneeds-app/audilege-server"
 SCHEMA="""
 CREATE TABLE IF NOT EXISTS player_items(owner INTEGER,book INTEGER,kind TEXT,value TEXT,PRIMARY KEY(owner,book,kind));
@@ -260,6 +260,40 @@ def start_update_checks(lib):
             time.sleep(300)
     Thread(target=check,name="Audilege-Updates",daemon=True).start()
 
+def store_bookmark(db,owner,book,edition,data,client_id=None):
+    cfi=data.get("cfi")
+    anchor=data.get("anchor")
+    audio_ms=data.get("audio_ms")
+    if audio_ms is not None:
+        audio_ms=max(0,min(2**31-1,int(audio_ms)))
+    db.execute("""INSERT OR IGNORE INTO bookmarks(owner,book,edition,chapter,offset,cue,label,client_id,cfi,anchor,audio_ms)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+        (owner,book,edition,max(0,int(data["chapter"])),max(0,int(data["offset"])),int(data.get("cue",-1)),
+         str(data["label"])[:220],client_id,str(cfi)[:4096] if cfi else None,str(anchor)[:512] if anchor else None,audio_ms))
+
+
+def sync_bookmarks(db,owner,book,edition,data=None):
+    if data is not None:
+        db.execute("BEGIN IMMEDIATE")
+    if not db.execute("SELECT 1 FROM editions WHERE book=? AND id=?",(book,edition)).fetchone():
+        raise KeyError("Ausgabe unbekannt.")
+    if data is not None:
+        for key in data.get("remove",[]):
+            if key.startswith("server:"):
+                db.execute("DELETE FROM bookmarks WHERE owner=? AND book=? AND edition=? AND id=?",
+                           (owner,book,edition,int(key.removeprefix("server:"))))
+            else:
+                db.execute("DELETE FROM bookmarks WHERE owner=? AND book=? AND edition=? AND client_id=?",
+                           (owner,book,edition,key))
+        removed=set(data.get("remove",[]))
+        for mark in data.get("add",[]):
+            key=str(uuid.UUID(mark["key"]))
+            if key not in removed:
+                store_bookmark(db,owner,book,edition,mark,key)
+    rows=db.execute("SELECT * FROM bookmarks WHERE owner=? AND book=? AND edition=? ORDER BY id DESC",(owner,book,edition))
+    return {"marks":[dict(row)|{"key":row["client_id"] or f'server:{row["id"]}'} for row in rows]}
+
+
 def player(db,owner,d=None):
     if d is not None:
         db.execute("BEGIN IMMEDIATE")
@@ -272,8 +306,7 @@ def player(db,owner,d=None):
                 db.execute("DELETE FROM bookmarks WHERE owner=? AND book=? AND id=?",(owner,book,int(d["remove"])))
             else:
                 if row[0]!=d.get("edition"):raise ValueError("Ausgabe hat sich geändert.")
-                db.execute("INSERT INTO bookmarks(owner,book,edition,chapter,offset,cue,label) VALUES(?,?,?,?,?,?,?)",
-                    (owner,book,row[0],max(0,int(d["chapter"])),max(0,int(d["offset"])),int(d.get("cue",-1)),str(d["label"])[:220]))
+                store_bookmark(db,owner,book,row[0],d)
         elif kind in ("queue","played"):
             if d.get("remove"):db.execute("DELETE FROM player_items WHERE owner=? AND book=? AND kind=?",(owner,book,kind))
             else:

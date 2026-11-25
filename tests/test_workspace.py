@@ -52,6 +52,48 @@ class WorkspaceTest(TestCase):
         remaining=self.call("/web/player",{"book":second,"kind":"queue","remove":True})["items"]
         self.assertEqual([row["book"] for row in remaining],[first])
 
+    def test_bookmarks_are_shared_by_web_and_app_and_isolated_by_profile(self):
+        book=self.call("/web/books",{"category":"ebook","files":[self.upload(test_server.epub(),"Test.epub")]})["id"]
+        edition=self.call(f"/api/v1/books/{book}")["files"][0]["id"]
+        path=f"/api/v1/books/{book}/bookmarks?fileId={edition}"
+        web={"kind":"bookmark","book":book,"edition":edition,"chapter":0,"offset":12,"label":"Web"}
+        self.call("/web/player",web)
+        web_mark=self.call(path)["marks"][0]
+        self.assertEqual(web_mark["label"],"Web")
+        app={"key":"a714d29a-01de-48ab-9569-af2ec4d8bb5d","chapter":0,"offset":0,
+             "label":"Android","cfi":"epubcfi(/6/2!/4/2/1:3)","audio_ms":1234}
+        for _ in range(2):
+            self.call(path,{"add":[app]})
+        marks=self.call("/web/player")["marks"]
+        self.assertEqual([m["label"] for m in marks],["Android","Web"])
+        self.assertEqual((marks[0]["cfi"],marks[0]["audio_ms"]),(app["cfi"],1234))
+        self.lib.user("zweites-profil","fixture-password")
+        other=self.call("/api/v1/auth/login",{"username":"zweites-profil","password":"fixture-password"})["accessToken"]
+        headers={"Authorization":"Bearer "+other}
+        self.assertEqual(self.call(path,{"remove":[web_mark["key"],app["key"]]},headers=headers)["marks"],[])
+        self.call(path,{"remove":[web_mark["key"]]})
+        self.assertEqual([m["label"] for m in self.call("/web/player")["marks"]],["Android"])
+        self.call("/web/player",{"kind":"bookmark","book":book,"remove":marks[0]["id"]})
+        self.assertEqual(self.call(path)["marks"],[])
+
+    def test_podcast_auto_download_selects_latest_of_subscribed_shows(self):
+        with self.lib.db() as db:
+            def episode(title,feed,published):
+                book=db.execute("INSERT INTO books(title,author,category) VALUES(?, 'Test','podcast')",(title,)).lastrowid
+                edition=db.execute("INSERT INTO editions(book,folder) VALUES(?,?)",(book,title)).lastrowid
+                db.execute("UPDATE books SET edition=? WHERE id=?",(edition,book))
+                db.execute("INSERT INTO podcast_items(feed,guid,book,show_title,published) VALUES(?,?,?,?,?)",
+                           (feed,title,book,"Testshow",published))
+                return book
+            db.execute("INSERT INTO podcast_feeds(url,title,creator,owner) VALUES('fixture-feed','Testshow','Test',1)")
+            episode("Ältere Folge","fixture-feed",100)
+            newest=episode("Neueste Folge","fixture-feed",200)
+            episode("Einzelimport","manual",300)
+        path="/api/v1/podcasts/autodownload"
+        self.assertEqual([row["id"] for row in self.call(path)["items"]],[newest])
+        self.call("/web/player",{"book":newest,"kind":"played"})
+        self.assertEqual(self.call(path)["items"],[])
+
     def test_metadata_and_cover(self):
         item=self.call("/web/books",{"category":"ebook","files":[self.upload(test_server.epub(),"Buch.epub")]})["id"]
         path="/web/admin/metadata/"+str(item)
