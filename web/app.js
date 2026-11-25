@@ -467,9 +467,12 @@ async function openReader(book,resume=false,requestedMode=null,background=false)
   await closeReader();if(request!==readerRequest)return;
   current=book;
   if(!background)displayBook(book,false);
+  const fileId=book.files?.find(file=>file.role==="primary")?.id;
+  const readProgress=id=>api("api/v1/reading-progress?fileId="+id).then(result=>result.items[0]);
+  const knownProgress=fileId?readProgress(fileId).catch(()=>null):null;
   const pub=await api("web/editions/"+book.id);
   if(request!==readerRequest)return;
-  const row=(await api("api/v1/reading-progress?fileId="+pub.fileId)).items[0];
+  const row=(fileId===pub.fileId?await knownProgress:null)??await readProgress(pub.fileId);
   if(request!==readerRequest)return;
   loading=true;publication=pub;position=row;dirty=false;
   const recentText=row.text.updatedAt && (!row.narration.updatedAt||row.text.updatedAt>row.narration.updatedAt);
@@ -488,17 +491,18 @@ async function openReader(book,resume=false,requestedMode=null,background=false)
     if(next>=0)index=next;
   }
   setChapter(index);
+  const startingCue=Math.max(0,cues.findIndex(c=>c.anchor===row.narration.fragment));
+  if(cues.length&&!recentText){
+    const fromSeconds=(row.narration.seconds??0)-globalOffset(chapter)-offsetOf(startingCue);
+    const fromFraction=((row.narration.percentage??0)*pub.sections.length/100-chapter)*partDuration(section())-offsetOf(startingCue);
+    setCue(startingCue,fromSeconds>.02?fromSeconds:Math.max(0,fromFraction));
+  }
   const model=await getPassage(pub,index,book);
   if(request!==readerRequest || publication!==pub || chapter!==index)return;
   currentPassage=model;
   const fromText=recentText?(row.text.webOffset!=null && /!\/4\)$/.test(row.text.cfi||"")?row.text.webOffset:
     fromCfi(model,row.text.cfi)??row.text.webOffset??0):0;
-  if(cues.length){
-    const i=recentText?cueAtOffset(fromText):Math.max(0,cues.findIndex(c=>c.anchor===row.narration.fragment));
-    const fromSeconds=(row.narration.seconds??0)-globalOffset(chapter)-offsetOf(i);
-    const fromFraction=((row.narration.percentage??0)*pub.sections.length/100-chapter)*partDuration(section())-offsetOf(i);
-    setCue(i,recentText?0:fromSeconds>.02?fromSeconds:Math.max(0,fromFraction));
-  }
+  if(cues.length&&recentText)setCue(cueAtOffset(fromText));
   loading=false;
   updateMiniPlayer();
   if(isPaged())syncMode(recentText?fromText:model?.anchors.get(cues[cueIndex]?.anchor)??0);

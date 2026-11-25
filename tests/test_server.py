@@ -1,3 +1,4 @@
+import gzip
 import io
 import json
 from pathlib import Path
@@ -76,6 +77,31 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.call(f"/api/v1/reading-progress?fileId={f}")["items"][0]["narration"]["seconds"],.35)
         self.assertEqual(self.call("/api/v1/dashboard/scrollers/continue-reading")["books"][0]["id"],b)
         self.assertEqual(self.call("/api/v1/books/query",{"pagination":{"page":0,"size":10}})["total"],1)
+
+    def test_reader_compresses_index_and_text_without_changing_byte_ranges(self):
+        source=io.BytesIO()
+        with ZipFile(io.BytesIO(epub(True))) as original, ZipFile(source,"w") as updated:
+            for name in original.namelist():
+                data=original.read(name)
+                if name=="a.xhtml":
+                    data=data.replace(b"</body>",b"<p>"+b"Fiktiver Beispielsatz. "*1200+b"</p></body>")
+                updated.writestr(name,data)
+        book=self.call("/web/books",{"files":[self.upload(source.getvalue(),"gross.epub")],"category":"ebook"})["id"]
+        index=f"/web/editions/{book}"
+        chapter=f"/api/v1/epub/{book}/file/a.xhtml"
+        for path in (index,chapter):
+            plain=self.call(path,raw=True)[2]
+            _, headers, compressed=self.call(path,headers={"Accept-Encoding":"gzip, deflate"},raw=True)
+            self.assertEqual(headers["Content-Encoding"],"gzip")
+            self.assertEqual(headers["Vary"],"Accept-Encoding")
+            self.assertEqual(gzip.decompress(compressed),plain)
+            self.assertLess(len(compressed),len(plain)//3)
+            _, headers, body=self.call(path,headers={"Accept-Encoding":"gzip;q=0.0"},raw=True)
+            self.assertIsNone(headers.get("Content-Encoding"))
+            self.assertEqual(body,plain)
+        status, headers, body=self.call(chapter,headers={"Range":"bytes=2-5","Accept-Encoding":"gzip"},raw=True)
+        self.assertEqual((status,body),(206,self.call(chapter,raw=True)[2][2:6]))
+        self.assertIsNone(headers.get("Content-Encoding"))
 
     def test_conversion_switches_only_after_success(self):
         bid=self.call("/web/books",{"files":[self.upload(epub(),"test.epub")],"category":"ebook"})["id"]

@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import date, datetime
 from getpass import getpass
 from functools import lru_cache
+import gzip
 import hashlib
 from http import HTTPStatus
 from http.cookies import SimpleCookie
@@ -202,6 +203,40 @@ def browser_bundle():
     return b"\n;\n".join((ROOT/"web"/name).read_bytes() for name in scripts)
 
 
+def edition_index(folder, file_id, compressed):
+    index = folder / "index.json"
+    stat = index.stat()
+    # Limit the resident cache even for editions with very large word-level indexes.
+    render = cached_edition_index if stat.st_size <= 24 * 1024**2 else encode_edition_index
+    return render(index, stat.st_mtime_ns, stat.st_size, file_id, compressed)
+
+
+def encode_edition_index(index, _mtime, _size, file_id, compressed):
+    data = json.loads(index.read_bytes())
+    data.pop("files", None)
+    data["fileId"] = file_id
+    payload = json.dumps(data, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()
+    return gzip.compress(payload, compresslevel=3, mtime=0) if compressed else payload
+
+
+cached_edition_index = lru_cache(maxsize=4)(encode_edition_index)
+
+
+@lru_cache(maxsize=24)
+def resource_index(path, _mtime, _size):
+    return json.loads(path.read_bytes())
+
+
+def accepts_gzip(header):
+    for entry in header.split(","):
+        name, _, options = entry.strip().partition(";")
+        if name.strip().lower() != "gzip":
+            continue
+        quality = re.search(r"(?:^|;)\s*q\s*=\s*(0(?:\.\d{0,3})?|1(?:\.0{0,3})?)\s*(?:;|$)", options, flags=re.I)
+        return not options.strip() or quality is not None and float(quality[1]) > 0
+    return False
+
+
 class Handler(BaseHTTPRequestHandler):
     def web_cookie(self,value,path="/",expired=False):
         # The proxy may remove the public mount point on the way to this server.
@@ -242,9 +277,9 @@ class Handler(BaseHTTPRequestHandler):
         with file.open("rb") as stream:
             return self.stream_open(stream,size,mime,sandbox,download)
 
-    def stream_open(self,f,size,mime,sandbox=True,download=False):
+    def stream_open(self,f,size,mime,sandbox=True,download=False,extra=()):
         start,end=0,size-1
-        headers=[("Accept-Ranges","bytes")]
+        headers=[("Accept-Ranges","bytes"),*extra]
         if sandbox:
             headers += [("Content-Security-Policy","sandbox; default-src 'none'")]
         if download:
@@ -693,9 +728,18 @@ class Handler(BaseHTTPRequestHandler):
             if match and method=="GET":
                 edition,folder=self.lib.edition(db,int(match[1] or match[2]),param("fileId"))
                 if match[1]:
-                    info=json.loads((folder/"index.json").read_text(encoding="utf8"))
-                    return self.output({k:v for k,v in info.items() if k!="files"}|{"fileId":edition["id"]})
-                files=json.loads((folder/"resources.json").read_text(encoding="utf8"))
+                    compressed=accepts_gzip(self.headers.get("Accept-Encoding",""))
+                    payload=edition_index(folder, edition["id"], compressed)
+                    headers=[("Vary","Accept-Encoding")]
+                    if compressed:
+                        headers.append(("Content-Encoding","gzip"))
+                    self.respond(200,"application/json; charset=utf-8",len(payload),headers)
+                    if self.command!="HEAD":
+                        self.wfile.write(payload)
+                    return
+                index_path=folder/"resources.json"
+                stat=index_path.stat()
+                files=resource_index(index_path,stat.st_mtime_ns,stat.st_size)
                 name=unquote(match[3])
                 for _ in range(2):
                     if name in files:
@@ -703,7 +747,16 @@ class Handler(BaseHTTPRequestHandler):
                     name=unquote(name)
                 mime=files[name]
                 with linked_media.member(folder,name,resource(folder,name)) as (stream,size):
-                    return self.stream_open(stream,size,mime)
+                    compressible=mime.startswith("text/") or mime.endswith(("/xml","+xml"))
+                    negotiated=compressible and 2048<=size<=8*1024**2 and not self.headers.get("Range")
+                    extra=[("Vary","Accept-Encoding")] if negotiated else []
+                    if negotiated and accepts_gzip(self.headers.get("Accept-Encoding","")):
+                        payload=gzip.compress(stream.read(),compresslevel=3,mtime=0)
+                        self.respond(200,mime,len(payload),extra+[("Content-Encoding","gzip"),
+                            ("Content-Security-Policy","sandbox; default-src 'none'")])
+                        if self.command!="HEAD":self.wfile.write(payload)
+                        return
+                    return self.stream_open(stream,size,mime,extra=extra)
             if path=="/api/v1/user-statistics/daily-reading" and method=="GET":
                 return self.output([{"day":k,"readingSeconds":int(v)} for k,v in sorted(merged(db,owner)["days"].items())])
             if path=="/api/v1/user-statistics/summary" and method=="GET":

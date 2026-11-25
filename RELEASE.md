@@ -1,7 +1,7 @@
 ## Deutsch
 
-Audilege synchronisiert Lesezeichen pro Profil und Ausgabe zwischen Android und Web. Vorhandene Web-Lesezeichen bleiben verfügbar. Die Android-App kann neue Folgen abonnierter Podcasts über WLAN herunterladen.
+Mitlesefassungen laden schneller. Der Server komprimiert die Zeitmarken und Kapiteltexte. Der Webreader lädt die Buchdaten und den Fortschritt gleichzeitig und bereitet die Tonspur früher vor.
 
 ## English
 
-Audilege syncs bookmarks by profile and edition between Android and the web. Existing web bookmarks remain available. The Android app can download new episodes of subscribed podcasts over Wi-Fi.
+Read-along books load faster. The server compresses timing data and chapter text. The web reader loads book data and progress concurrently and prepares audio earlier.
