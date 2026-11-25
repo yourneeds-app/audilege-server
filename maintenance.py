@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request,urlopen
 from zipfile import ZipFile
 
-VERSION="0.4.15"
+VERSION="0.4.16"
 REPO="https://github.com/yourneeds-app/audilege-server"
 SCHEMA="""
 CREATE TABLE IF NOT EXISTS player_items(owner INTEGER,book INTEGER,kind TEXT,value TEXT,PRIMARY KEY(owner,book,kind));
@@ -265,7 +265,7 @@ def player(db,owner,d=None):
         db.execute("BEGIN IMMEDIATE")
         kind=d.get("kind")
         book=int(d["book"])
-        row=db.execute("SELECT edition FROM books WHERE id=? AND merged_into IS NULL",(book,)).fetchone()
+        row=db.execute("SELECT edition,category FROM books WHERE id=? AND merged_into IS NULL",(book,)).fetchone()
         if not row:raise KeyError(book)
         if kind=="bookmark":
             if d.get("remove"):
@@ -279,12 +279,14 @@ def player(db,owner,d=None):
             else:
                 value="1"
                 if kind=="queue":
+                    if row["category"] not in ("audio","audilege","podcast"):
+                        raise ValueError("Für die Warteschlange ist eine Hörfassung nötig.")
                     value=str(db.execute("SELECT coalesce(max(CAST(value AS INTEGER)),0)+1 FROM player_items WHERE owner=? AND kind='queue'",(owner,)).fetchone()[0])
                 db.execute("INSERT OR IGNORE INTO player_items VALUES(?,?,?,?)",(owner,book,kind,value))
         elif kind=="promote":
             db.execute("UPDATE player_items SET value=(SELECT coalesce(min(CAST(value AS INTEGER)),0)-1 FROM player_items WHERE owner=? AND kind='queue') WHERE owner=? AND book=? AND kind='queue'",(owner,owner,book))
         else:raise ValueError("Unbekannte Aktion.")
-    return {"items":[dict(r) for r in db.execute("SELECT i.* FROM player_items i JOIN books b ON i.book=b.id WHERE owner=? AND b.merged_into IS NULL ORDER BY CAST(value AS INTEGER),book",(owner,))],
+    return {"items":[dict(r) for r in db.execute("SELECT i.*,b.title FROM player_items i JOIN books b ON i.book=b.id WHERE owner=? AND b.merged_into IS NULL AND (i.kind<>'queue' OR b.category IN ('audio','audilege','podcast')) ORDER BY CAST(value AS INTEGER),book",(owner,))],
             "marks":[dict(r) for r in db.execute("SELECT * FROM bookmarks WHERE owner=? ORDER BY id DESC",(owner,))]}
 
 def devices(db,owner,remove=None):

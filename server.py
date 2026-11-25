@@ -597,7 +597,7 @@ class Handler(BaseHTTPRequestHandler):
                 rows=catalog(db,owner,storage_roots=self.catalog_roots(),show_editions=True)
                 if data.get("filter"):
                     rows=sorted((b for b in rows if 0<b["readingProgress"]<100),key=lambda b:b["updatedAt"],reverse=True)
-                return self.output(dict(items=rows[page*size:(page+1)*size],total=len(rows)))
+                return self.output(dict(items=rows[page*size:(page+1)*size],total=len(rows),sharedQueue=True))
             if path=="/api/v1/dashboard/scrollers/continue-reading" and method=="GET":
                 rows=sorted((b for b in catalog(db,owner) if 0<b["readingProgress"]<100),key=lambda b:b["updatedAt"],reverse=True)
                 return self.output({"books":rows[:50],"total":len(rows)})

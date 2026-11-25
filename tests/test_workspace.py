@@ -37,6 +37,21 @@ class WorkspaceTest(TestCase):
         with self.assertRaises(HTTPError) as error:self.call("/web/library",headers=headers)
         self.assertEqual(error.exception.code,401)
 
+    def test_play_queue_is_shared_per_profile_and_can_be_reordered(self):
+        with self.lib.db() as db:
+            first=db.execute("INSERT INTO books(title,author,category) VALUES('Fiktiv A','Test','audio')").lastrowid
+            second=db.execute("INSERT INTO books(title,author,category) VALUES('Fiktiv B','Test','podcast')").lastrowid
+        self.call("/web/player",{"book":first,"kind":"queue"})
+        self.call("/web/player",{"book":second,"kind":"queue"})
+        self.call("/web/player",{"book":second,"kind":"promote"})
+        self.assertEqual([(row["book"],row["title"]) for row in self.call("/web/player")["items"]],
+                         [(second,"Fiktiv B"),(first,"Fiktiv A")])
+        self.lib.user("zweites-profil","fixture-password")
+        other=self.call("/api/v1/auth/login",{"username":"zweites-profil","password":"fixture-password"})["accessToken"]
+        self.assertEqual(self.call("/web/player",headers={"Authorization":"Bearer "+other})["items"],[])
+        remaining=self.call("/web/player",{"book":second,"kind":"queue","remove":True})["items"]
+        self.assertEqual([row["book"] for row in remaining],[first])
+
     def test_metadata_and_cover(self):
         item=self.call("/web/books",{"category":"ebook","files":[self.upload(test_server.epub(),"Buch.epub")]})["id"]
         path="/web/admin/metadata/"+str(item)

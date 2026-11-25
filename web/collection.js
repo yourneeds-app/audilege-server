@@ -1,6 +1,6 @@
 "use strict";
 let shelfPage="start",facetValue="",libraryLinks=[];
-const facets={series:tr("Reihen"),tags:tr("Genres"),authors:tr("Autoren")};
+const facets={series:tr("Reihen"),tags:tr("Genres"),authors:tr("Autoren"),narrator:tr("Sprecher")};
 function action(label,callback,cls=""){
   const b=el("button",label,cls);b.type="button";
   b.onclick=()=>Promise.resolve().then(callback).catch(hint);return b;
@@ -27,6 +27,9 @@ function renderDetailFacets(book){
   const series=book.metadata?.series;
   $("detailSeries").replaceChildren(...(series?[facetLink("series",series)]:[]));
   $("detailSeries").hidden=!series;
+  const narrator=book.metadata?.narrator;
+  $("detailNarrator").replaceChildren(...(narrator?[facetLink("narrator",narrator,tr("Gelesen von")+" "+narrator)]:[]));
+  $("detailNarrator").hidden=!narrator;
 }
 function appendBookPage(grid,list,offset=0){
   for(const b of list.slice(offset,offset+48))grid.append(bookTile(b));
@@ -58,7 +61,7 @@ function groupsInto(box,field,groups,limit=Infinity){
 function globalResults(box,term){
   const tokens=fold(term).trim().split(/\s+/),matches=(...parts)=>tokens.every(t=>fold(parts.join(" ")).includes(t));
   let count=0;
-  const titles=books.filter(b=>matches(b.title,...b.authors.map(a=>a.name),b.metadata?.series,b.metadata?.tags,b.metadata?.isbn,b.podcast?.show,b.podcast?.creator)).sort(compareBooks);
+  const titles=books.filter(matchesShelfStatus).filter(b=>matches(b.title,...b.authors.map(a=>a.name),b.metadata?.narrator,b.metadata?.series,b.metadata?.tags,b.metadata?.isbn,b.podcast?.show,b.podcast?.creator)).sort(compareBooks);
   for(const [heading,items] of [[tr("Titel"),titles.filter(b=>b.category!=="podcast")],[tr("Podcastfolgen"),titles.filter(b=>b.category==="podcast")]]){
     if(!items.length)continue;count+=items.length;sectionHead(box,heading);const grid=el("div",null,"grid");box.append(grid);appendBookPage(grid,groupEditions(items));
   }
@@ -132,6 +135,7 @@ function renderCollection(){
   $("startNav").setAttribute("aria-current",shelfPage==="start"&&!term?"page":"false");
   for(const key of Object.keys(facets))$(key+"Nav").setAttribute("aria-current",shelfPage===key&&!term?"page":"false");
   $("libraryNav").setAttribute("aria-current",!custom?"page":"false");
+  $("shelfStatus").hidden=shelfPage!=="library"||discovering;
   $("shelfSort").hidden=!term&&(shelfPage==="start"||shelfPage in facets&&!facetValue);
   $("showSeries").parentElement.hidden=!term&&(category==="podcast"||shelfPage in facets&&!facetValue);
   if(!custom)return false;
@@ -161,6 +165,7 @@ function renderCollection(){
   renderStart(box);return true;
 }
 
+$("shelfStatus").onchange=renderShelf;
 $("showSeries").checked=localStorage.getItem("audilege-show-series")==="true";
 $("showSeries").onchange=()=>{
   localStorage.setItem("audilege-show-series",String($("showSeries").checked));renderShelf();

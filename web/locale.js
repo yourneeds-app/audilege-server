@@ -118,6 +118,7 @@ function tr(text){return uiLanguage==="en"&&Object.hasOwn(strings,text)?strings[
 Object.assign(strings,{"Kapitel noch {time}":"Chapter left {time}","Buch noch {time}":"Book left {time}","Sprung rückgängig":"Undo jump"});
 Object.assign(strings,{"Läuft seit {time}":"Running for {time}","Aktuelle Phase seit {time}":"Current stage for {time}"});
 Object.assign(strings,{"Fortschritt der aktuellen Phase":"Current stage progress"});
+Object.assign(strings,{"Jeder Status":"Any status","Angefangen":"Started","Abgeschlossen":"Finished","Sprecher":"Narrators","Autor Z–A":"Author Z–A"});
 function staticLocale(){
   if(uiLanguage!=="en")return;
   const tree=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);

@@ -1,4 +1,4 @@
-# Audilege Server 0.4.15
+# Audilege Server 0.4.16
 
 Alignment jobs show measured progress for the current stage. On Linux, run `sh worker/install.sh` in the updated server folder to install the worker that reports progress.
 

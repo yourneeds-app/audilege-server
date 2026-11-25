@@ -65,15 +65,20 @@ function groupEditions(list){
   const ebooks=new Set(list.filter(b=>b.category==="ebook").map(b=>b.id));
   return list.filter(b=>b.category!=="audio"||!ebooks.has(b.companionId));
 }
+function matchesShelfStatus(book){
+  const status=$("shelfStatus").value;
+  const finished=book.played||book.readingProgress>=100;
+  return status==="finished"?finished:status==="started"?!finished&&book.readingProgress>0:true;
+}
 function renderShelf(){
   if(renderCollection())return;
   const term=$("bookSearch").value.trim().toLocaleLowerCase();
-  const visible=books.filter(b=>[b.title,...b.authors.map(a=>a.name),b.metadata?.tags,b.metadata?.series,b.podcast?.show,b.podcast?.creator].join(" ").toLocaleLowerCase().includes(term));
+  const visible=books.filter(matchesShelfStatus).filter(b=>[b.title,...b.authors.map(a=>a.name),b.metadata?.tags,b.metadata?.series,b.podcast?.show,b.podcast?.creator].join(" ").toLocaleLowerCase().includes(term));
   const groups=Object.keys(categories).filter(k=>books.some(b=>b.category===k)||(k==="podcast"&&subscriptions.length));
   if(category&&!groups.includes(category))category="";
   visible.sort(compareBooks);
   renderSidebarCategories(groups);
-  renderResume(!term&&!category&&!discovering);
+  renderResume(!term&&!category&&!discovering&&!$("shelfStatus").value);
   $("shelfTitle").textContent=categories[category]||(discovering?tr("Entdecken"):tr("Bibliothek"));
   $("folderBack").hidden=!category&&!discovering;
   const filters=$("categories");filters.replaceChildren();
@@ -83,6 +88,9 @@ function renderShelf(){
   }
   const shelf=$("books");shelf.replaceChildren();
   if(!groups.length)shelf.append(el("p",tr("Deine Bibliothek ist leer. Füge ein EPUB, ein Hörbuch oder eine Podcastfolge hinzu."),"empty"));
+  if($("shelfStatus").value&&!visible.some(b=>!category||b.category===category)){
+    shelf.append(el("p",tr("Keine passenden Titel gefunden."),"empty"));return;
+  }
   if(category==="podcast"){podcastShelf(shelf,visible.filter(b=>b.category==="podcast"),term);return;}
   if(discovering&&!category){
     const grid=el("div",null,"grid");
@@ -108,6 +116,8 @@ function bookTile(book){
   button.append(cover(book),el("strong",book.title));
   tile.append(button);
   appendAuthorLinks(tile,book);
+  const narrator=book.metadata?.narrator;
+  if(narrator)tile.append(facetLink("narrator",narrator,tr("Gelesen von")+" "+narrator));
   if($("showSeries").checked&&book.metadata?.series){
     const volume=String(book.metadata.volume??"").trim();
     const label=[book.metadata.series,volume&&tr("Band")+" "+volume].filter(Boolean).join(" · ");
@@ -499,7 +509,7 @@ $("back").onclick=()=>(playerVisible()&&current?openReader(current):home()).catc
 $("miniTitle").onclick=()=>{if(current)openReader(current,true).catch(hint);};
 $("miniPlay").onclick=()=>{if(media.paused)media.play().catch(hint);else media.pause();};
 for(const event of ["play","pause"])media.addEventListener(event,updateMiniPlayer);
-function resetShelf(){shelfPage="library";facetValue="";category="";discovering=false;podcastFilter="";allEpisodes=false;$("bookSearch").value="";}
+function resetShelf(){shelfPage="library";facetValue="";category="";discovering=false;podcastFilter="";allEpisodes=false;$("bookSearch").value="";$("shelfStatus").value="";}
 $("libraryNav").onclick=()=>{resetShelf();home().catch(hint);};
 $("folderBack").onclick=()=>{resetShelf();renderShelf();};
 $("statsNav").onclick=()=>statistics().catch(hint);
