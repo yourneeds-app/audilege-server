@@ -182,7 +182,7 @@ for(const [id,[label,symbol]] of Object.entries(navIcons)){
 for(const b of [$("libraryNav"),$("statsNav"),$("usersNav"),$("discoverNav")]){b.title=b.textContent;b.setAttribute("aria-label",b.textContent);}
 search.oninput=()=>{if(!globalTools.hidden)renderShelf();};
 document.addEventListener("keydown",e=>{
-  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"&&!$("shell").hidden&&!globalTools.hidden&&!document.querySelector("dialog[open]")){
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"&&!$("shell").hidden&&!globalTools.hidden&&!$("mainPage").inert&&!document.querySelector("dialog[open]")){
     e.preventDefault();search.focus();search.select();
   }
   if(e.key==="Escape"&&document.activeElement===search){search.value="";renderShelf();}

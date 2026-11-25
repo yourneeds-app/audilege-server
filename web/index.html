@@ -4,17 +4,17 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark"><title>Audilege · Bibliothek</title>
 <link rel="icon" href="icon.webp"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="interface.css">
-<link rel="stylesheet" href="shell.css"><script defer src="audilege-ui.js?v=0.4.18"></script></head>
+<link rel="stylesheet" href="shell.css"><script defer src="audilege-ui.js?v=0.4.19"></script></head>
 <body>
 <link rel="stylesheet" href="collection.css">
 <main id="loginView" class="login"><img class="wordmark" src="audilege.webp" alt="Audilege von yourneeds">
 <form id="loginForm" method="post" action="web/login"><h1>Anmelden</h1><label>Benutzername<input name="username" autocomplete="username" required></label>
 <label>Passwort<input name="password" type="password" autocomplete="current-password" required></label>
 <button class="primary">Anmelden</button><p role="alert" id="loginError"></p></form></main>
-<div class="shell" id="shell" hidden><button id="menuToggle" aria-controls="sidebar" aria-label="Navigationsmenü">☰</button><button id="backdrop" hidden aria-label="Menü schließen"></button><aside id="sidebar"><img class="wordmark" src="audilege.webp" alt="Audilege von yourneeds">
+<div class="shell" id="shell" hidden><button id="menuToggle" aria-controls="sidebar" aria-label="Navigationsmenü">☰</button><button id="backdrop" hidden tabindex="-1" aria-label="Menü schließen"></button><aside id="sidebar"><img class="wordmark" src="audilege.webp" alt="Audilege von yourneeds">
 <nav aria-label="Navigation"><button id="libraryNav" aria-current="page">Bibliothek</button><details id="categoryNav"><summary>Kategorien</summary><div id="sideCategories"></div><button id="discoverNav">Entdecken</button></details><button id="statsNav">Statistik</button><button id="usersNav" hidden>Verwaltung</button></nav>
 <div class="profile"><button id="profileNav">Server &amp; Profil<small id="accountName"></small></button><button id="settingsNav">Einstellungen</button></div></aside>
-<main class="page">
+<main class="page" id="mainPage" tabindex="-1">
 <section id="profileView" hidden><h1>Server &amp; Profil</h1><dl class="panel"><dt>Angemeldet als</dt><dd id="profileName"></dd><dt>Server</dt><dd id="profileServer"></dd></dl><button id="logout">Abmelden</button></section>
 <section id="settingsView" hidden><h1>Einstellungen</h1><div id="preferences"></div><section class="panel prefGroup"><h2>Audiobookshelf-Statistik</h2><button id="absOpen">Aus Audiobookshelf importieren</button></section></section>
 <section id="shelf"><button class="textButton" id="folderBack" hidden>← Bibliothek</button><header><h1 id="shelfTitle">Bibliothek</h1><button class="primary" id="add">Titel hinzufügen</button></header>

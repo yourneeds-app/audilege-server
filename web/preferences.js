@@ -3,7 +3,10 @@ const narrowScreen=matchMedia("(max-width: 760px)");
 let discovering=false;
 function setDrawer(open){
   $("shell").classList.toggle("drawerOpen",open);
-  $("sidebar").inert=!open&&narrowScreen.matches;$("backdrop").hidden=!open||!narrowScreen.matches;
+  const mobileMenu=open&&narrowScreen.matches;
+  $("sidebar").inert=!open;
+  $("mainPage").inert=mobileMenu;
+  $("backdrop").hidden=!mobileMenu;
   $("menuToggle").setAttribute("aria-expanded",String(open));
 }
 function initialDrawer(){setDrawer(!narrowScreen.matches&&localStorage.getItem("audilege-sidebar")!=="closed");}
@@ -12,12 +15,18 @@ $("menuToggle").onclick=()=>{
   const open=!$("shell").classList.contains("drawerOpen");
   setDrawer(open);
   if(!narrowScreen.matches)localStorage.setItem("audilege-sidebar",open?"open":"closed");
-  else if(open)$("libraryNav").focus();
+  else if(open){
+    const nav=$("sidebar");
+    const active=nav.querySelector('[aria-current="page"]');
+    (active?.getClientRects().length?active:$("startNav")).focus();
+  }
 };
 function dismiss(){setDrawer(false);$("menuToggle").focus();}
 $("backdrop").onclick=dismiss;
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"&&narrowScreen.matches&&!$("backdrop").hidden)dismiss();
+  if(e.key==="Escape"&&!e.defaultPrevented&&!$("backdrop").hidden&&!document.querySelector("dialog[open]")){
+    e.preventDefault();dismiss();
+  }
 });
 function renderSidebarCategories(groups){
   const holder=$("sideCategories");holder.replaceChildren();

@@ -43,6 +43,7 @@ Object.assign(strings,{
   "Dateitags ausgelesen. Änderungen mit Speichern bestätigen.": "File tags loaded. Save to confirm the changes.",
   "Gewählte Folgen importieren": "Import selected episodes",
   "Hördateien": "Audio files",
+  "Statusfilter zurücksetzen": "Reset progress filter",
   "Keine passenden Folgen gefunden.": "No matching episodes found.",
   "Scan läuft …": "Scan in progress …",
   "Zuletzt geprüft am ": "Last checked on ",

@@ -1,7 +1,7 @@
 ## Deutsch
 
-Mitlesefassungen laden schneller. Der Server komprimiert die Zeitmarken und Kapiteltexte. Der Webreader lädt die Buchdaten und den Fortschritt gleichzeitig und bereitet die Tonspur früher vor.
+Auf kleinen Bildschirmen bleibt der Tastaturfokus beim geöffneten Menü in der Navigation. Leere Treffer nach einer Statusauswahl bieten einen direkten Weg zurück. Primäre Schaltflächen sind in beiden Farbschemata besser lesbar.
 
 ## English
 
-Read-along books load faster. The server compresses timing data and chapter text. The web reader loads book data and progress concurrently and prepares audio earlier.
+The mobile menu keeps keyboard focus in navigation. Empty progress-filter results provide a reset action. Primary buttons have clearer contrast in both themes.

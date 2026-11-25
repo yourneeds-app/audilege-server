@@ -1,5 +1,8 @@
 :root[data-theme=light]{color-scheme:light;--page:#fbfaf8;--aside:#f3f2ef;--card:#fff;--ink:#20231f;--muted:#62645f;--accent:#504573;--tint:#e9e6f1;--line:#deded9;--word:#ded4ec;--active:#dcd5e9}
 :root[data-theme=dark]{color-scheme:dark;--page:#191c1d;--aside:#202425;--card:#222627;--ink:#eeeae7;--muted:#bcb8b4;--line:#3d4243;--tint:#403432;--accent:#efb5a2;--active:#57413d;--word:#674d43}
+:root[data-theme=light] button.primary{color:#fff}
+:root[data-theme=dark] button.primary{color:#211a19}
+#mainPage:focus{outline:none}
 [data-theme=light] .wordmark{filter:none}[data-theme=dark] .wordmark{filter:invert(.95)}
 .shell{display:grid;grid-template-columns:minmax(0,1fr);align-items:start}
 .shell.drawerOpen{grid-template-columns:14.5rem minmax(0,1fr)}

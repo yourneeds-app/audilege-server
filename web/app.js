@@ -24,7 +24,10 @@ async function api(path,method="GET",data){
 }
 function show(id){for(const k of ["shelf","reader","statistics","users","profileView","settingsView"])$(k).hidden=k!==id;
   updateSearchVisibility();
-  if(narrowScreen.matches)setDrawer(false);
+  if(!$("backdrop").hidden){
+    setDrawer(false);
+    $("mainPage").focus({preventScroll:true});
+  }
   for(const [k,v] of [["libraryNav",id==="shelf"||id==="reader"],["statsNav",id==="statistics"],["usersNav",id==="users"]]){
     if(v)$(k).setAttribute("aria-current","page");else $(k).removeAttribute("aria-current");
   }
@@ -87,9 +90,17 @@ function renderShelf(){
     button.onclick=()=>{category=k;podcastFilter="";allEpisodes=false;renderShelf();};filters.append(button);
   }
   const shelf=$("books");shelf.replaceChildren();
-  if(!groups.length)shelf.append(el("p",tr("Deine Bibliothek ist leer. Füge ein EPUB, ein Hörbuch oder eine Podcastfolge hinzu."),"empty"));
-  if($("shelfStatus").value&&!visible.some(b=>!category||b.category===category)){
-    shelf.append(el("p",tr("Keine passenden Titel gefunden."),"empty"));return;
+  if(!groups.length){
+    shelf.append(el("p",tr("Deine Bibliothek ist leer. Füge ein EPUB, ein Hörbuch oder eine Podcastfolge hinzu."),"empty"));
+    return;
+  }
+  const status=$("shelfStatus");
+  if(status.value&&!visible.some(b=>!category||b.category===category)){
+    const empty=el("div",null,"empty");
+    empty.append(el("p",tr("Keine passenden Titel gefunden.")),action(tr("Statusfilter zurücksetzen"),()=>{
+      status.value="";renderShelf();status.focus({preventScroll:true});
+    }));
+    shelf.append(empty);return;
   }
   if(category==="podcast"){podcastShelf(shelf,visible.filter(b=>b.category==="podcast"),term);return;}
   if(discovering&&!category){
