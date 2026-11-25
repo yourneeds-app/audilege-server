@@ -59,10 +59,20 @@ def catalog(db,owner,book_id=None,start=False,storage_roots=None):
         prog = json.loads(b["data"]) if b["data"] else {}
         pct = prog.get("percentage",0)
         narrated = b["category"] != "ebook"
+        txt=prog.get("text") or {}
+        voice=prog.get("narration") or {}
+        latest_text=(txt.get("updatedAt") or "")>(voice.get("updatedAt") or "")
+        resume_mode=("read" if b["category"]=="ebook" else "listen" if b["category"] in ("audio","podcast")
+                     else prog.get("resumeMode") or ("read" if latest_text else "along"))
+        chapter=txt.get("page") if latest_text else voice.get("sectionIndex")
+        if latest_text and not chapter:
+            match=re.match(r"epubcfi\(/\d+/(\d+)",txt["cfi"] if isinstance(txt.get("cfi"),str) else "")
+            if match:chapter=int(match[1])//2
         out.append({"id":b["id"],"title":b["title"],"authors":[{"name":b["author"]}] if b["author"] else [],
             "category":b["category"],"metadata":json.loads(b["metadata"]),"played":bool(b["played"]),"status":"present","libraryId":1,"readingProgress":pct,
             "readStatus":"finished" if pct>=100 else "reading" if pct else "unread",
             "addedAt":b["added_at"],"updatedAt":prog.get("updatedAt") or "", "cover":bool(b["cover"] or b["custom_cover"]),
+            "resumeMode":resume_mode,"resumeChapter":chapter+(0 if latest_text else 1) if type(chapter) is int else None,
             "files":[{"id":b["edition"],"role":"primary","format":"epub","filename":"book.epub","mediaOverlay":{"available":narrated}}]})
         if storage_roots is not None:
             origin = shelf_location(b["storage_source"], storage_roots)

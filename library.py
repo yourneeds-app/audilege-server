@@ -73,7 +73,7 @@ def now():
 
 
 def default_progress(file):
-    return {"fileId":file,"percentage":0,"updatedAt":None,"koreader":None,
+    return {"fileId":file,"percentage":0,"updatedAt":None,"koreader":None,"resumeMode":None,
             "text":dict.fromkeys(("cfi","page","webOffset","updatedAt")),
             "narration":dict.fromkeys(("seconds","fragment","sectionIndex","percentage","updatedAt")),
             "kobo":dict.fromkeys(("source","type","value","contentPercent"))}
@@ -81,7 +81,10 @@ def default_progress(file):
 
 def get_progress(db, owner, file):
     row = db.execute("SELECT data FROM progress WHERE owner=? AND edition=?", (owner,file)).fetchone()
-    return json.loads(row[0]) if row else default_progress(file)
+    if not row:return default_progress(file)
+    data=json.loads(row[0])
+    data.setdefault("resumeMode",None)
+    return data
 
 
 def save_progress(db, owner, entry):
@@ -107,6 +110,8 @@ def save_progress(db, owner, entry):
                 if key not in ("updatedAt","percentage") and key in entry.get(group,{}):
                     row[group][key] = entry[group][key]
         row.update(percentage=percent,updatedAt=stamp)
+        mode=entry.get("resumeMode")
+        row["resumeMode"]=mode if mode in ("read","listen","along") else ("read" if kind=="text" else None)
         row[kind]["updatedAt"] = stamp
         if kind == "narration":
             row[kind]["percentage"] = percent

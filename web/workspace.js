@@ -233,11 +233,12 @@ function openPodcastFolder(key=""){
 function podcastOverview(shelf,term){
   const shows=subscriptions.filter(s=>(s.show+" "+s.creator).toLocaleLowerCase().includes(term));
   if(term&&!shows.length)return;
-  const header=el("div",null,"podHeader"),open=el("button",tr("Podcastordner öffnen →"),"textButton");
-  open.onclick=()=>openPodcastFolder();header.append(el("h2","Podcasts"),open);shelf.append(header);
+  const home=shelfPage==="start";
+  const header=el("div",null,home?"sectionHeading":"podHeader"),open=el("button",home?tr("Alle anzeigen"):tr("Podcastordner öffnen →"),"textButton");
+  open.onclick=()=>openPodcastFolder();header.append(el("h2",home?tr("Deine Podcasts"):"Podcasts"),open);shelf.append(header);
   if(!shows.length){shelf.append(el("p",tr("Keine abonnierten Podcasts."),"muted"));return;}
   const grid=el("div",null,"grid");shelf.append(grid);
-  for(const s of (shelfPage==="start"?shows.slice(0,6):shows)){
+  for(const s of (home?shows.slice(0,3):shows)){
     const tile=el("button",null,"book podTile");
     const episode=books.filter(b=>b.podcast?.key===s.key&&b.cover).sort((a,b)=>b.id-a.id)[0];
     const fallback=()=>cover(episode||{title:s.show});

@@ -1,6 +1,10 @@
-# Audilege Server 0.4.7
+# Audilege Server 0.4.8
 
 For Windows and Linux, with a German and English web interface. See [the English quick start](README.en.md) and the [release downloads](https://github.com/yourneeds-app/audilege-server/releases).
+
+## Update auf 0.4.8
+
+Die Startseite zeigt den zuletzt genutzten Titel mit Modus und Fortschritt. Darunter stehen weitere angefangene Bücher, Neuzugänge und abonnierte Podcasts.
 
 ## Update auf 0.4.7
 

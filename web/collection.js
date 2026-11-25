@@ -54,12 +54,59 @@ function globalResults(box,term){
   if(shows.length){count+=shows.length;sectionHead(box,tr("Sendungen"));for(const s of shows)box.append(action(s.show,()=>{resetShelf();openPodcastFolder(s.key);}));}
   const n=el("p",count?count+tr(" Treffer"):tr("Keine passenden Titel gefunden."),"muted");n.setAttribute("role","status");box.prepend(n);
 }
+function renderStart(box){
+  const recent=books.filter(b=>b.updatedAt && b.readingProgress<100 && !(b.category==="podcast"&&b.played))
+    .sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).slice(0,3);
+  const labels={read:[tr("Zuletzt gelesen"),tr("Weiterlesen")],listen:[tr("Zuletzt gehört"),tr("Weiterhören")],along:[tr("Zuletzt mitgelesen"),tr("Weiter mitlesen")]};
+  for(const [index,book] of recent.entries()){
+    const mode=book.resumeMode,hero=index===0,card=action("",()=>openReader(book,true),hero?"homeFeature":"homeSmall");
+    const art=cover(book,mode==="listen"?"audio":"book");
+    const info=el("span",null,"homeInfo"),percent=Math.round(book.readingProgress)+" %";
+    if(hero){
+      const [eyeline,cta]=labels[mode]||[tr("Zuletzt geöffnet"),tr("Fortsetzen")];
+      info.append(el("small",eyeline),el("strong",book.title),el("span",book.authors.map(a=>a.name).join(", ")));
+      const progress=el("progress");progress.max=100;progress.value=book.readingProgress;progress.setAttribute("aria-label",tr("Fortschritt"));
+      const chapter=book.resumeChapter>0?tr("Kapitel {n}").replace("{n}",book.resumeChapter):"";
+      info.append(progress,el("small",[chapter,percent].filter(Boolean).join(" · ")),el("span",cta,"homeCTA"));
+      card.append(info,art);box.append(card);
+      if(art.tagName==="IMG")art.addEventListener("load",()=>{
+        const canvas=document.createElement("canvas");canvas.width=canvas.height=8;
+        const ctx=canvas.getContext("2d");if(!ctx)return;
+        ctx.drawImage(art,0,0,8,8);
+        const data=ctx.getImageData(0,0,8,8).data,sums=[0,0,0];let weight=0;
+        for(let i=0;i<data.length;i+=4){
+          const rgb=[data[i],data[i+1],data[i+2]],w=(1+Math.max(...rgb)-Math.min(...rgb))*data[i+3]/255;
+          rgb.forEach((v,k)=>sums[k]+=v*w);weight+=w;
+        }
+        if(weight)card.style.setProperty("--cover-base","rgb("+sums.map(x=>Math.round(x/weight)).join(",")+")");
+      },{once:true});
+      if(recent.length>1){sectionHead(box,tr("Auch angefangen"));box.append(el("div",null,"homeStarted"));}
+    }else{
+      info.append(el("strong",book.title),el("small",[modeLabels[mode],percent].filter(Boolean).join(" · ")));
+      card.append(art,info);box.lastElementChild.append(card);
+    }
+  }
+  const newest=books.filter(b=>b.category!=="podcast").sort((a,b)=>(b.addedAt||"").localeCompare(a.addedAt||"")||b.id-a.id).slice(0,3);
+  const columns=el("div",null,"homeColumns");
+  if(newest.length){
+    const shelf=el("section");sectionHead(shelf,tr("Neu im Regal"),()=>catalogPage("library"));
+    const tiles=el("div",null,"homeBooks");newest.forEach(b=>tiles.append(bookTile(b)));shelf.append(tiles);columns.append(shelf);
+  }
+  if(subscriptions.length){
+    const podcasts=el("section",null,"homePodcasts");podcastOverview(podcasts,"");columns.append(podcasts);
+  }
+  if(columns.children.length)box.append(columns);
+  if(!box.children.length)box.append(el("p",tr("Deine Bibliothek ist leer.")));
+}
 function renderCollection(){
   const term=$("bookSearch").value.trim(),box=$("books");
   const sortKey="audilege-sort:"+[shelfPage,category,podcastFilter,facetValue,Boolean(term),discovering].join("/");
   if($("shelfSort").dataset.key!==sortKey){$("shelfSort").dataset.key=sortKey;$("shelfSort").value=localStorage.getItem(sortKey)||(shelfPage==="series"&&facetValue?"series":localStorage.getItem("audilege-sort"))||"new";}
   $("shelfSort").onchange=()=>{localStorage.setItem(sortKey,$("shelfSort").value);renderShelf();};
   const custom=term||shelfPage==="start"||shelfPage in facets||discovering;
+  const startPage=shelfPage==="start"&&!term;
+  $("shelf").classList.toggle("startPage",startPage);
+  $("shelfTitle").hidden=startPage;
   $("startNav").setAttribute("aria-current",shelfPage==="start"&&!term?"page":"false");
   for(const key of Object.keys(facets))$(key+"Nav").setAttribute("aria-current",shelfPage===key&&!term?"page":"false");
   $("libraryNav").setAttribute("aria-current",!custom?"page":"false");
@@ -89,21 +136,7 @@ function renderCollection(){
     }
     return true;
   }
-  $("shelfTitle").textContent=tr("Übersicht");
-  const recent=books.filter(b=>b.updatedAt&&b.readingProgress<100).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).slice(0,3);
-  if(recent.length){sectionHead(box,tr("Fortsetzen"));const row=el("div",null,"resumeRow");box.append(row);
-    for(const b of recent){const card=action("",()=>openReader(b,true),"resumeCard"),t=el("span",null,"resumeText");
-      t.append(el("small",categories[b.category]),el("strong",b.title),el("span",b.authors.map(v=>v.name).join(", ")),el("small",Math.round(b.readingProgress)+" %"));
-      card.append(cover(b),t);row.append(card);}
-  }
-  for(const k of ["audilege","ebook","audio"]){
-    const list=books.filter(b=>b.category===k).sort((a,b)=>b.id-a.id);if(!list.length)continue;
-    sectionHead(box,categories[k],()=>{resetShelf();category=k;return home();});const grid=el("div",null,"grid homeShelf");box.append(grid);
-    for(const b of list.slice(0,6))grid.append(bookTile(b));
-  }
-  if(subscriptions.length)podcastOverview(box,"");
-  for(const field of ["series","tags"]){const groups=collect(field);if(groups.size){sectionHead(box,facets[field],()=>catalogPage(field));groupsInto(box,field,groups,6);}}
-  if(!box.children.length)box.append(el("p",tr("Deine Bibliothek ist leer.")));return true;
+  renderStart(box);return true;
 }
 
 $("showSeries").checked=localStorage.getItem("audilege-show-series")==="true";

@@ -269,7 +269,7 @@ function queueProgress(){
   if(!publication||!dirty||loading)return saveQueue;
   const fileId=publication.fileId,gen=generation,sec=section(),c=isPaged()?null:cues[cueIndex];
   const elapsed=c?offsetOf(cueIndex)+within():0;
-  const entry={fileId,kind:c?"narration":"text",percentage:100*(chapter+(c?elapsed/Math.max(.001,partDuration(sec)):0))/publication.sections.length};
+  const entry={fileId,kind:c?"narration":"text",resumeMode:readerMode,percentage:100*(chapter+(c?elapsed/Math.max(.001,partDuration(sec)):0))/publication.sections.length};
   if(c){
     const seconds=globalOffset(chapter)+elapsed;
     entry.narration={seconds,fragment:c.anchor,sectionIndex:chapter};
@@ -441,7 +441,8 @@ async function openReader(book,resume=false,requestedMode=null,background=false)
   if(request!==readerRequest)return;
   loading=true;publication=pub;position=row;dirty=false;
   const recentText=row.text.updatedAt && (!row.narration.updatedAt||row.text.updatedAt>row.narration.updatedAt);
-  readerMode=requestedMode||(book.category==="audilege"?(recentText?"read":"along"):book.category==="ebook"?"read":"listen");
+  const lastMode=["read","listen","along"].includes(row.resumeMode)?row.resumeMode:(recentText?"read":"along");
+  readerMode=requestedMode||(book.category==="audilege"?lastMode:book.category==="ebook"?"read":"listen");
   if(!background)displayBook(book,true);
   $("chapter").replaceChildren(...pub.sections.map((s,i)=>new Option(s.name,String(i))));
   let index=row.narration.sectionIndex??Math.floor(row.percentage*pub.sections.length/100);

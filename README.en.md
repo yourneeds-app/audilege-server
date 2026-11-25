@@ -1,6 +1,10 @@
-# Audilege Server 0.4.7
+# Audilege Server 0.4.8
 
 Keep ebooks, audiobooks, synchronized read-along editions and subscribed podcasts on your own computer. A profile shares positions between the web reader and Audilege for Android. BookOrbit can be used through a separate app profile.
+
+## Upgrade to 0.4.8
+
+Home shows your last title, mode and progress, followed by other titles in progress, recent additions and podcast subscriptions.
 
 ## Upgrade to 0.4.7
 

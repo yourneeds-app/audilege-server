@@ -111,6 +111,9 @@ Object.assign(strings,{
   "Treffer übernommen. Angaben prüfen und speichern.": "Match selected. Review and save your changes.",
   "“ ist abonniert. Audilege lädt die neuesten Folgen im Hintergrund.": "” subscribed. Latest episodes download in the background."
 });
+Object.assign(strings,{"Zuletzt gelesen":"Last read","Zuletzt gehört":"Last listened to","Zuletzt mitgelesen":"Last read along",
+  "Zuletzt geöffnet":"Last opened","Weiterlesen":"Continue reading","Weiterhören":"Continue listening","Weiter mitlesen":"Continue read-along",
+  "Auch angefangen":"Also in progress","Neu im Regal":"New on your shelf","Deine Podcasts":"Your podcasts","Kapitel {n}":"Chapter {n}"});
 function tr(text){return uiLanguage==="en"&&Object.hasOwn(strings,text)?strings[text]:text;}
 function staticLocale(){
   if(uiLanguage!=="en")return;
