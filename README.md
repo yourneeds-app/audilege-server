@@ -1,4 +1,6 @@
-# Audilege Server 0.4.14
+# Audilege Server 0.4.15
+
+Abgleichaufträge zeigen den gemessenen Fortschritt je Phase. Unter Linux nach dem Update `sh worker/install.sh` im neuen Serverordner ausführen, damit der installierte Worker die Fortschrittswerte meldet.
 
 Der einmalige Audiobookshelf-Import steht unter Einstellungen → Audiobookshelf-Statistik.
 

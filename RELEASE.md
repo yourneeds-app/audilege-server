@@ -1,7 +1,7 @@
 ## Deutsch
 
-Eindeutig zugeordnete E-Books und Hörbücher erscheinen als ein Titel mit auswählbaren Ausgaben. Die Formatfilter zeigen weiterhin die jeweilige Ausgabe. „Aufträge“ aktualisiert laufende Abgleiche automatisch und zeigt Laufzeit und Dauer der aktuellen Phase. Neue M4B-Importe übernehmen die eingebetteten Kapitel, wenn FFprobe sie auslesen kann.
+Laufende Abgleiche zeigen einen Fortschrittsbalken für die aktuelle Phase. Der Prozentsatz stammt aus dem Worker. Phasen ohne messbaren Fortschritt zeigen einen Balken ohne Prozentwert. Die Auftragsliste aktualisiert sich automatisch. Unter Linux aktualisiert `worker/install.sh` eine bereits installierte Worker-Umgebung.
 
 ## English
 
-Unambiguously matched ebooks and audiobooks share one title with an edition selector. Format filters still show the selected format. Jobs refresh automatically and show runtime and time in the current stage. New M4B imports use embedded chapters when available through FFprobe.
+Running jobs show the current stage with real progress reported by the worker. Stages without measurable progress use an indeterminate bar. The jobs list refreshes automatically. On Linux, run `worker/install.sh` to update an existing worker installation.

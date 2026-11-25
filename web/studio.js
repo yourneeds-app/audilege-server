@@ -21,6 +21,18 @@ function jobTimes(job){
   if(job.phase_at && job.note)labels.push(tr("Aktuelle Phase seit {time}").replace("{time}",clock(now-job.phase_at)));
   return labels.join(" · ");
 }
+function appendJobProgress(row,job){
+  if(job.state!=="running")return;
+  const progress=el("progress");
+  progress.max=100;
+  progress.setAttribute("aria-label",tr("Fortschritt der aktuellen Phase"));
+  const measured=Number.isInteger(job.phase_progress);
+  if(measured)progress.value=job.phase_progress;
+  const block=el("div",null,"jobProgress");
+  block.append(progress);
+  if(measured)block.append(el("span",job.phase_progress+" %"));
+  row.append(block);
+}
 async function adminJobs(){
   const box=el("div"),container=sheet(tr("Aufträge"));container.append(box);
   async function refreshJobs(){
@@ -31,6 +43,7 @@ async function adminJobs(){
     for(const j of result.jobs){
       const row=el("section"),status={done:"Abgeschlossen",running:"Prüfung läuft",waiting:"In Warteschlange",failed:"Prüfung unterbrochen"};
       row.append(el("strong",j.title),el("p",tr(j.note||status[j.state])));
+      appendJobProgress(row,j);
       const times=jobTimes(j);if(times)row.append(el("small",times));
       if(j.state==="failed")row.append(tool(tr("Erneut versuchen"),async()=>{await api("web/admin/jobs/"+j.id+"/retry","POST",{});await adminJobs();}));
       box.append(row);

@@ -406,7 +406,7 @@ class Handler(BaseHTTPRequestHandler):
                 if devices and method in ("GET","POST"):
                     return self.output(maintenance.devices(db,int(devices[1]),self.body()["device"] if method=="POST" else None))
                 if path=="/web/admin/jobs" and method=="GET":
-                    return self.output({"jobs":[dict(r) for r in db.execute("SELECT j.id,b.title,j.state,j.note,j.started_at,j.phase_at FROM jobs j JOIN books b ON b.id=j.book ORDER BY j.id DESC LIMIT 100")]})
+                    return self.output({"jobs":[dict(r) for r in db.execute("SELECT j.id,b.title,j.state,j.note,j.started_at,j.phase_at,j.phase_progress FROM jobs j JOIN books b ON b.id=j.book ORDER BY j.id DESC LIMIT 100")]})
                 retry_admin=re.fullmatch(r"/web/admin/jobs/(\d+)/retry",path)
                 if retry_admin and method=="POST":
                     self.body()
@@ -547,7 +547,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.output(companion_choices(db,int(companion_route[1])))
             if path=="/web/library" and method=="GET":
                 db.execute("BEGIN")
-                jobs=[dict(r) for r in db.execute("SELECT j.id,j.book,b.title,j.state,j.note,j.started_at,j.phase_at FROM jobs j JOIN books b ON j.book=b.id WHERE owner=? ORDER BY j.id DESC LIMIT 12",(owner,))]
+                jobs=[dict(r) for r in db.execute("SELECT j.id,j.book,b.title,j.state,j.note,j.started_at,j.phase_at,j.phase_progress FROM jobs j JOIN books b ON j.book=b.id WHERE owner=? ORDER BY j.id DESC LIMIT 12",(owner,))]
                 account=db.execute("SELECT name,is_admin FROM users WHERE id=?",(owner,)).fetchone()
                 return self.output({"books":catalog(db,owner,start=param("view")=="start",storage_roots=self.catalog_roots(),show_editions=True),"subscriptions":podcast_subscriptions(db),"jobs":jobs,"account":dict(account),"sources":SOURCES,"revision":revision(db),"version":maintenance.VERSION,
                     "links":[dict(r) for r in db.execute("SELECT * FROM library_links")]})

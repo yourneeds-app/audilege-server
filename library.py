@@ -222,7 +222,7 @@ class Library:
             db.execute("""CREATE TRIGGER IF NOT EXISTS book_added_at AFTER INSERT ON books WHEN NEW.added_at IS NULL
                        BEGIN UPDATE books SET added_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=NEW.id; END""")
             job_columns={r[1] for r in db.execute("PRAGMA table_info(jobs)")}
-            for column in ("started_at","phase_at"):
+            for column in ("started_at","phase_at","phase_progress"):
                 if column not in job_columns:
                     db.execute(f"ALTER TABLE jobs ADD COLUMN {column} INTEGER")
             if "cover_revision" not in [r[1] for r in db.execute("PRAGMA table_info(books)")]:
@@ -548,7 +548,14 @@ class Library:
                 step=line.decode("utf-8",errors="replace").strip()
                 if step in WORKER_STEPS:
                     log.flush()
-                    with self.db() as db:db.execute("UPDATE jobs SET note=?,phase_at=? WHERE id=?",(step,int(time.time()),job_id))
+                    with self.db() as db:
+                        db.execute("UPDATE jobs SET note=?,phase_at=?,phase_progress=NULL WHERE id=?",(step,int(time.time()),job_id))
+                elif step.startswith("AUDILEGE_PROGRESS "):
+                    percent=step.removeprefix("AUDILEGE_PROGRESS ")
+                    if percent.isascii() and percent.isdigit() and len(percent)<=3 and int(percent)<=100:
+                        log.flush()
+                        with self.db() as db:
+                            db.execute("UPDATE jobs SET phase_progress=? WHERE id=?",(int(percent),job_id))
             process.stdout.close()
             code=process.wait()
         if code:
@@ -565,7 +572,7 @@ class Library:
                 row = db.execute("SELECT * FROM jobs WHERE state='waiting' ORDER BY id LIMIT 1").fetchone()
                 if row:
                     stamp=int(time.time())
-                    db.execute("UPDATE jobs SET state='running',started_at=?,phase_at=? WHERE id=?",(stamp,stamp,row["id"]))
+                    db.execute("UPDATE jobs SET state='running',started_at=?,phase_at=?,phase_progress=NULL WHERE id=?",(stamp,stamp,row["id"]))
             if not row:
                 self.wakeup.wait(5)
                 self.wakeup.clear()
@@ -575,7 +582,7 @@ class Library:
             originals=None
             try:
                 ready=self.aligned_epub(job,row["id"],row["language"])
-                with self.db() as db:db.execute("UPDATE jobs SET note='EPUB und Zeitmarken prüfen',phase_at=? WHERE id=?",(int(time.time()),row["id"]))
+                with self.db() as db:db.execute("UPDATE jobs SET note='EPUB und Zeitmarken prüfen',phase_at=?,phase_progress=NULL WHERE id=?",(int(time.time()),row["id"]))
                 dest.mkdir()
                 try:os.link(ready,dest/"book.epub")
                 except OSError:shutil.copyfile(ready,dest/"book.epub")

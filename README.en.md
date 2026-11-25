@@ -1,4 +1,6 @@
-# Audilege Server 0.4.14
+# Audilege Server 0.4.15
+
+Alignment jobs show measured progress for the current stage. On Linux, run `sh worker/install.sh` in the updated server folder to install the worker that reports progress.
 
 The one-time Audiobookshelf import is under Settings → Audiobookshelf statistics.
 

@@ -49,6 +49,7 @@ async function refresh(initial=false,background=false){
   for(const j of pending){
     const row=el("div",null,"panel jobRow");
     row.append(el("span",j.title+" · "+({waiting:tr("In Warteschlange"),running:j.note||tr("Abgleich wird gestartet"),failed:j.note}[j.state])));
+    appendJobProgress(row,j);
     const times=jobTimes(j);if(times)row.append(el("small",times));
     if(j.state==="failed"){
       const retry=el("button",tr("Erneut versuchen"));

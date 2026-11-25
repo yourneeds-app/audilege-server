@@ -133,3 +133,7 @@ main.page:has(#miniPlayer:not([hidden])) {padding-bottom:5.5rem}
 .book>.facetLink{font-size:.82em;color:var(--muted)}
 .facetLink:hover,.facetLink:focus-visible{color:var(--accent);text-decoration-color:currentColor}
 #author:empty{display:none}
+
+.jobProgress{display:flex;align-items:center;gap:.65rem;width:100%;margin:.4rem 0}
+.jobProgress progress{flex:1;max-width:24rem;accent-color:var(--accent)}
+.jobProgress span{font-variant-numeric:tabular-nums}
