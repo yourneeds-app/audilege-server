@@ -226,7 +226,7 @@ class Inbox:
                             raise InterruptedError("Kopiervorgang läuft noch.")
                     title=base.name if base.is_dir() and (multidisc or len(files)>1) else ""
                     tracks=[(p,p.relative_to(base).as_posix() if multidisc else p.name) for p in files]
-                    self.lib.import_tracks(tracks,{"category":kind,"title":title},scan=(key,sig),verify=verify,link_root=reference)
+                    self.lib.import_tracks(tracks,{"category":kind,"title_folder":title},scan=(key,sig),verify=verify,link_root=reference)
                     display_updates.append((str(base),key))
                     self.failed.pop(key,None);count+=1
                 except (FileNotFoundError,InterruptedError):

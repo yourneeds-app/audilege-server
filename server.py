@@ -28,6 +28,7 @@ from library import AUDIO, Library, ROOT, TYPES, get_progress, save_progress
 from metadata import SOURCES, fetch_cover, image_type, search
 from podcasts import Subscriptions, import_episode, preview
 from scanner import Inbox, folder_series, shelf_location
+from media_tools import audiobook_title
 import curation
 import linked_media
 from activity import merged
@@ -44,12 +45,11 @@ def catalog(db,owner,book_id=None,start=False,storage_roots=None):
             WHERE b.merged_into IS NULL AND p.owner=? AND json_extract(p.data,'$.percentage')<100
             ORDER BY json_extract(p.data,'$.updatedAt') DESC LIMIT 3))"""
         args.append(owner)
-    storage_column = ""
+    storage_column = """(SELECT coalesce(s.display_source,s.source) FROM scanned_media s WHERE s.book=b.id
+        AND NOT EXISTS (SELECT 1 FROM readalong_exports x WHERE x.edition=b.edition AND lower(x.path)=lower(s.source))
+        ORDER BY s.source LIMIT 1) AS storage_source,"""
     if storage_roots is not None:
-        storage_column = """(SELECT x.path FROM readalong_exports x WHERE x.edition=b.edition) AS export_path,
-            (SELECT coalesce(s.display_source,s.source) FROM scanned_media s WHERE s.book=b.id
-             AND NOT EXISTS (SELECT 1 FROM readalong_exports x WHERE x.edition=b.edition AND lower(x.path)=lower(s.source))
-             ORDER BY s.source LIMIT 1) AS storage_source,"""
+        storage_column += "(SELECT x.path FROM readalong_exports x WHERE x.edition=b.edition) AS export_path,"
     for b in db.execute("SELECT "+storage_column+""" b.*,e.cover,p.data,pi.feed,pi.show_title,pi.published,coalesce(nullif(pf.creator,''),pi.creator) AS creator,
         EXISTS(SELECT 1 FROM player_items i WHERE i.book=b.id AND i.owner=? AND i.kind='played') AS played,
         (EXISTS(SELECT 1 FROM book_covers c WHERE c.book=b.id) OR EXISTS(SELECT 1 FROM role_covers c WHERE c.book=b.id)) AS custom_cover FROM books b JOIN editions e ON e.id=b.edition
@@ -74,6 +74,10 @@ def catalog(db,owner,book_id=None,start=False,storage_roots=None):
             "addedAt":b["added_at"],"updatedAt":prog.get("updatedAt") or "", "cover":bool(b["cover"] or b["custom_cover"]),
             "resumeMode":resume_mode,"resumeChapter":chapter+(0 if latest_text else 1) if type(chapter) is int else None,
             "files":[{"id":b["edition"],"role":"primary","format":"epub","filename":"book.epub","mediaOverlay":{"available":narrated}}]})
+        if b["category"] == "audio" and b["storage_source"]:
+            folder = Path(b["storage_source"]).name
+            if b["title"].casefold() == folder.casefold():
+                out[-1]["title"] = audiobook_title(out[-1]["metadata"].get("title"), b["title"])
         if storage_roots is not None:
             origin = shelf_location(b["storage_source"], storage_roots)
             out[-1]["storage"] = shelf_location(b["export_path"], storage_roots) if b["export_path"] else origin

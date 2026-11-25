@@ -75,12 +75,13 @@ class UpdateTests(unittest.TestCase):
             self.assertEqual(inbox.status()["imported"],0)
             self.http.inbox=inbox
             item=self.call("/web/library")["books"][0]
+            self.assertEqual(item["title"],"Example")
             self.assertEqual(item["metadata"]["series"],"Example Series")
             self.assertEqual(item["metadata"]["volume"],"7")
             self.assertEqual(item["storage"]["path"],title.relative_to(root).as_posix())
             with self.lib.db() as db:
                 rows=db.execute("SELECT * FROM books WHERE merged_into IS NULL").fetchall()
-                self.assertEqual([r["title"] for r in rows],[title.name])
+                self.assertEqual([r["title"] for r in rows],["Example"])
                 file=rows[0]["edition"]
                 offsets={r["owner"]:json.loads(r["data"])["narration"]["seconds"] for r in db.execute("SELECT * FROM progress WHERE edition=?",(file,))}
                 self.assertEqual(offsets,{2:3.5,10:5.5})
@@ -153,7 +154,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn('method="post" action="web/login"',html)
         self.assertNotRegex(html,r'(src|href)="/')
         self.assertEqual(html.count("<script"),1)
-        bundle=self.call("/audilege-ui.js?v=0.4.9",raw=True)[2]
+        bundle=self.call("/audilege-ui.js?v=0.4.10",raw=True)[2]
         self.assertLess(bundle.index(b"function tr("),bundle.index(b"const categories ="))
         credentials={"username":"eins","password":"test-fixture-1","cookiePath":"/medien/audilege/"}
         origin={"Origin":"https://school.example","Host":"school.example"}

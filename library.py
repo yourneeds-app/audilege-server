@@ -418,7 +418,8 @@ class Library:
             elif kind in ("audio","podcast") and all(p.suffix.lower() in AUDIO for p,_ in tracks):
                 if link_root:
                     links["tracks"]={f"track{i}{p.suffix.lower()}":linked_media.describe(link_root,p) for i,(p,_) in enumerate(tracks)}
-                fields=audio_epub(epub,tracks,str(body.get("title") or ""),str(body.get("author") or ""),linked=bool(link_root))
+                fields=audio_epub(epub,tracks,str(body.get("title") or ""),str(body.get("author") or ""),linked=bool(link_root),
+                                  title_folder=str(body.get("title_folder") or "") if scan and kind=="audio" else "")
             else:
                 raise ValueError("Diese Dateien passen nicht zur Rubrik.")
             if links:

@@ -8,7 +8,7 @@ import posixpath
 import re
 import shutil
 import subprocess
-from media_tools import audio_metadata, command, probe
+from media_tools import audio_metadata, audiobook_title, command, probe
 import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -203,7 +203,7 @@ def source_audio_art(folder):
                 if name in resources and path.is_file():return name,path
 
 
-def audio_epub(target, tracks, title, author, *, linked=False):
+def audio_epub(target, tracks, title, author, *, linked=False, title_folder=""):
     """Give the current Android reader seekable audio chapters in an EPUB media overlay."""
     items, spine, timings = [], [], []
     fields={}
@@ -214,6 +214,9 @@ def audio_epub(target, tracks, title, author, *, linked=False):
             metadata = probe(track)
             if i==0:
                 fields=audio_metadata(metadata)
+                if title_folder:
+                    tags = {key.lower(): str(value).strip() for key, value in metadata["format"].get("tags", {}).items()}
+                    title = audiobook_title(tags.get("album"), title_folder)
                 title=title or fields.pop("title","") or Path(label).stem
                 author=author or fields.pop("author","")
                 picture=track_picture(track,metadata)

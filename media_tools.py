@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -39,6 +40,22 @@ def probe(path):
 
     r=subprocess.run(command(path,"--probe"),capture_output=True,timeout=60,check=True)
     return json.loads(r.stdout)
+
+
+def audiobook_title(album, folder_title):
+    """Prefer a book-level tag, with the folder as a fallback for old truncated tags."""
+    def without_volume(value):
+        return re.sub(r"^(?:vol(?:ume)?|band)\.?\s*\d+(?:[.,]\d+)?\s*[-–—]\s*", "", value, flags=re.I).strip()
+
+    folder_title = without_volume(folder_title)
+    album = without_volume(album or "")
+    if not album or re.fullmatch(r"(?:chapter|kapitel|track)\s*\d+", album, re.I):
+        return folder_title
+    # ID3v1 stores 30 bytes per title. Some tools retain that truncated text in newer tags.
+    prefix = album.casefold()
+    if len(album) >= 28 and folder_title.casefold().startswith(prefix) and len(folder_title) > len(album):
+        return folder_title
+    return album
 
 
 def audio_metadata(info):

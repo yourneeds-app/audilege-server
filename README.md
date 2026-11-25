@@ -1,4 +1,4 @@
-# Audilege Server 0.4.9
+# Audilege Server 0.4.10
 
 Der einmalige Audiobookshelf-Import steht unter Einstellungen → Audiobookshelf-Statistik.
 
