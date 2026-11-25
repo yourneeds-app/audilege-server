@@ -42,11 +42,7 @@ function readerControls(){
   readerMenu.replaceChildren(el("summary",tr("Werkzeuge")));
   if(textual)readerMenu.append(action(tr("Im Buch suchen"),findInBook));
   readerMenu.append(action(tr("Lesezeichen"),bookmarkSheet));
-  const undo=action(tr("Rückgängig"),async()=>{
-    if(jumpBack?.pub!==publication)return;
-    const j=jumpBack;jumpBack=null;await locate(j.index,j.offset,j.cue,false);
-    if(!isPaged()&&j.cue>=0){setCue(j.cue,j.time);dirty=true;await queueProgress();}
-  });
+  const undo=action(tr("Rückgängig"),undoReaderJump);
   readerMenu.ontoggle=()=>{undo.hidden=jumpBack?.pub!==publication;};
   undo.hidden=!jumpBack;readerMenu.append(undo);
   if(!isPaged())readerMenu.append(action(tr("Sleep-Timer"),timerSheet));
@@ -56,6 +52,14 @@ function readerControls(){
   }));
   if(textual&&isPaged()&&"speechSynthesis" in window)readerMenu.append(action(tr("Text vorlesen"),speakPassage));
 }
+async function undoReaderJump(){
+  if(jumpBack?.pub!==publication)return;
+  const j=jumpBack,playing=!media.paused;
+  jumpBack=null;
+  await locate(j.index,j.offset,j.cue,false,j.time,playing);
+  if(!isPaged()&&j.pub===publication)updateTransport();
+}
+$("undoAudioJump").onclick=()=>undoReaderJump().catch(hint);
 function pauseFollowing(){if(readerMode==="along"&&publication){followPassage=false;returnToAudio.hidden=false;}}
 $("text").addEventListener("wheel",pauseFollowing,{passive:true});$("text").addEventListener("touchmove",pauseFollowing,{passive:true});
 document.addEventListener("keydown",e=>{if(["PageUp","PageDown","ArrowUp","ArrowDown"].includes(e.key)&&!document.querySelector("dialog[open]"))pauseFollowing();});
@@ -65,12 +69,12 @@ function timerSheet(){
     box.append(tool(label,()=>{clearTimeout(sleepTimer);stopAtChapter=v===-1;if(v>0)sleepTimer=setTimeout(()=>media.pause(),v*60000);studio.close();}));
   }
 }
-async function locate(index,offset,cue=-1,remember=true){
+async function locate(index,offset,cue=-1,remember=true,time=0,play=false){
   if(remember)rememberJump();
   const pub=publication,b=current;setChapter(index);const model=await getPassage(pub,index,b);if(pub!==publication||index!==chapter)return;
   currentPassage=model;
   if(isPaged()){syncMode(offset);positionPage(offset);}
-  else if(cues.length){setCue(cue>=0?Math.min(cue,cues.length-1):cueAtOffset(offset));}
+  else if(cues.length){setCue(cue>=0?Math.min(cue,cues.length-1):cueAtOffset(offset),time,play);}
   dirty=true;await queueProgress();
 }
 function findInBook(){

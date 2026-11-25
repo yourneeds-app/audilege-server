@@ -175,15 +175,18 @@ function skipAudio(delta){
 function seekChapter(seconds){
   if(!cues.length)return;
   const offset=Math.max(0,Math.min(partDuration(section())-.01,seconds));let at=0;
-  if(Math.abs(offset-(offsetOf(cueIndex)+within()))>=60)rememberJump();
+  if(adjustingSeek || Math.abs(offset-(offsetOf(cueIndex)+within()))>=60)rememberJump();
   for(let i=0;i<cues.length;i++){const end=at+cues[i].end-cues[i].begin;if(offset<end){setCue(i,offset-at,!media.paused);break;}at=end;}
   dirty=true;updateTransport();queueProgress();
 }
 $("skipBack").onclick=()=>skipAudio(-15);$("skipForward").onclick=()=>skipAudio(15);
-$("audioSpeed").onchange=()=>{media.defaultPlaybackRate=media.playbackRate=Number($("audioSpeed").value);};
+$("audioSpeed").onchange=()=>{media.defaultPlaybackRate=media.playbackRate=Number($("audioSpeed").value);updateTransport();};
+media.addEventListener("ratechange",updateTransport);
 
 function clock(seconds){
-  const s=Math.max(0,Math.floor(seconds||0));return Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
+  const s=Math.max(0,Math.floor(seconds||0)),hours=Math.floor(s/3600);
+  const minutes=String(Math.floor(s/60)%60);
+  return (hours?hours+":"+minutes.padStart(2,"0"):minutes)+":"+String(s%60).padStart(2,"0");
 }
 function renderChapters(){
   const list=$("trackRows");list.replaceChildren();
@@ -194,17 +197,26 @@ function renderChapters(){
     b.onclick=()=>{$("chapter").value=String(i);$("chapter").onchange();};list.append(b);
   }
 }
+function showRemaining(position,total){
+  const chapterLeft=(total-position)/media.playbackRate;
+  $("elapsed").textContent=clock(position);
+  $("remaining").textContent=tr("Kapitel noch {time}").replace("{time}",clock(chapterLeft));
+  const bookLeft=(globalOffset(publication.sections.length)-globalOffset(chapter)-position)/media.playbackRate;
+  $("bookRemaining").hidden=current?.category==="podcast"||publication.sections.length<2;
+  $("bookRemaining").textContent=tr("Buch noch {time}").replace("{time}",clock(bookLeft));
+  $("undoAudioJump").hidden=jumpBack?.pub!==publication;
+}
 function updateTransport(){
   if(!publication||!cues.length)return;
   const total=partDuration(section()),time=offsetOf(cueIndex)+within();
   $("chapterNumber").textContent=tr("Kapitel ")+(chapter+1)+tr(" von ")+publication.sections.length;
   if(!adjustingSeek){$("chapterSeek").max=total;$("chapterSeek").value=time;$("chapterSeek").setAttribute("aria-valuetext",clock(time)+tr(" von ")+clock(total));}
-  $("elapsed").textContent=clock(time);$("remaining").textContent="−"+clock(total-time);
+  if(!adjustingSeek)showRemaining(time,total);
   $("audioPlay").textContent=media.paused?tr("Abspielen"):"Pause";
 }
 $("audioPlay").onclick=()=>{if(!publication)return;if(media.paused)media.play().catch(hint);else media.pause();};
-$("chapterSeek").oninput=e=>{adjustingSeek=true;$("elapsed").textContent=clock(e.target.value);$("remaining").textContent="−"+clock(e.target.max-e.target.value);};
-$("chapterSeek").onchange=e=>{adjustingSeek=false;seekChapter(Number(e.target.value));};
+$("chapterSeek").oninput=e=>{adjustingSeek=true;showRemaining(Number(e.target.value),Number(e.target.max));};
+$("chapterSeek").onchange=e=>{seekChapter(Number(e.target.value));adjustingSeek=false;updateTransport();};
 function resetDock(){
   clearTimeout(dockTimer);$("playerBody").hidden=false;$("showDock").hidden=true;adjustingSeek=false;
 }

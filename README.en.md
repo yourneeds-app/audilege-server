@@ -1,4 +1,4 @@
-# Audilege Server 0.4.12
+# Audilege Server 0.4.13
 
 The one-time Audiobookshelf import is under Settings → Audiobookshelf statistics.
 

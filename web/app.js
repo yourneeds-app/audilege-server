@@ -412,7 +412,7 @@ media.onplaying=()=>{if(!loading)segmentStart??=Date.now();cancelAnimationFrame(
 media.onwaiting=recordListening;
 media.onpause=()=>{recordListening();if(current)queueProgress();};
 media.onended=()=>{if(!publication||loading)return;dirty=true;if(cueIndex+1<cues.length)setCue(cueIndex+1,0,true);else nextSection(true);};
-$("chapter").onchange=()=>{const playing=!media.paused;setChapter(Number($("chapter").value));if(cues.length)setCue(0,0,playing);dirty=true;queueProgress();};
+$("chapter").onchange=()=>{const playing=!media.paused;if(publication&&cues.length&&Number($("chapter").value)!==chapter)rememberJump();setChapter(Number($("chapter").value));if(cues.length)setCue(0,0,playing);dirty=true;queueProgress();};
 $("text").onclick=e=>{if(!e.target.dataset?.anchor)return;let i=cues.findIndex(q=>q.anchor===e.target.dataset.anchor);
   if(i<0 && e.target.dataset.sentence)i=cues.findIndex(q=>q.anchor===e.target.dataset.sentence);
   if(i>=0){setCue(i,0,!media.paused);dirty=true;queueProgress();}};

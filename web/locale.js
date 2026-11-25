@@ -115,6 +115,7 @@ Object.assign(strings,{"Zuletzt gelesen":"Last read","Zuletzt gehört":"Last lis
   "Zuletzt geöffnet":"Last opened","Weiterlesen":"Continue reading","Weiterhören":"Continue listening","Weiter mitlesen":"Continue read-along",
   "Auch angefangen":"Also in progress","Neu im Regal":"New on your shelf","Deine Podcasts":"Your podcasts","Kapitel {n}":"Chapter {n}"});
 function tr(text){return uiLanguage==="en"&&Object.hasOwn(strings,text)?strings[text]:text;}
+Object.assign(strings,{"Kapitel noch {time}":"Chapter left {time}","Buch noch {time}":"Book left {time}","Sprung rückgängig":"Undo jump"});
 function staticLocale(){
   if(uiLanguage!=="en")return;
   const tree=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);

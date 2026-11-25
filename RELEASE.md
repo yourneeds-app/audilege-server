@@ -1,7 +1,7 @@
 ## Deutsch
 
-Autor und Reihe sind auf Buchkacheln und in den Buchdetails anklickbar. Die Webbibliothek lädt unveränderte Buchcover aus dem privaten Browser-Cache. Beim Ersetzen eines Covers bekommt es eine neue Bildadresse. Die Aktualisierung laufender Aufträge baut unveränderte Bibliothekskacheln nicht erneut auf.
+Der Player zeigt die verbleibende Hörzeit im Kapitel und, wenn verfügbar, im ganzen Buch beim eingestellten Tempo. Nach einem Sprung über den Schieberegler oder zu einem anderen Kapitel lässt sich die vorige Stelle wiederherstellen.
 
 ## English
 
-Authors and series open directly from book tiles and details. The web library reuses unchanged book artwork from the browser’s private cache. Replaced covers receive a new URL. Background updates preserve unchanged library tiles.
+The player shows the time left in the chapter and, when available, the book at the selected speed. Undo returns to the previous position after scrubbing or changing chapters.

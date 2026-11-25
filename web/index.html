@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark"><title>Audilege · Bibliothek</title>
 <link rel="icon" href="icon.webp"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="interface.css">
-<link rel="stylesheet" href="shell.css"><script defer src="audilege-ui.js?v=0.4.12"></script></head>
+<link rel="stylesheet" href="shell.css"><script defer src="audilege-ui.js?v=0.4.13"></script></head>
 <body>
 <link rel="stylesheet" href="collection.css">
 <main id="loginView" class="login"><img class="wordmark" src="audilege.webp" alt="Audilege von yourneeds">
@@ -28,7 +28,7 @@
 <div id="activeBook" hidden>
 <div class="readControls"><label id="chapterWrap">Kapitel<select id="chapter"></select></label><label id="modeWrap">Markierung<select id="mode"><option value="word">Wort</option><option value="sentence">Satz</option></select></label></div>
 <div class="player" id="player"><div class="playerArt coverStage" id="listenArt" hidden></div><div class="audioConsole"><div id="audioHeading"><small id="audioKind"></small><h1 id="audioTitle"></h1><p id="audioCredit"></p></div><div id="playerBody"><small id="chapterNumber"></small><h2 id="listenChapter"></h2><audio id="audio" preload="metadata"></audio>
-<input type="range" id="chapterSeek" min="0" value="0" step=".1" aria-label="Position im Kapitel"><div class="timeRow"><span id="elapsed">0:00</span><span id="remaining"></span></div>
+<input type="range" id="chapterSeek" min="0" value="0" step=".1" aria-label="Position im Kapitel"><div class="timeRow"><span id="elapsed">0:00</span><span id="remaining"></span></div><div class="timeRow"><span id="bookRemaining"></span><button id="undoAudioJump" class="textButton" hidden>Sprung rückgängig</button></div>
 <div class="transport"><button id="skipBack" aria-label="15 Sekunden zurück">↶ 15 s</button><button id="audioPlay" class="primary">Abspielen</button><button id="skipForward" aria-label="15 Sekunden vor">15 s ↷</button><label>Tempo <select id="audioSpeed"><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option></select></label><button id="hideDock" aria-label="Player ausblenden">⌄</button></div></div><button id="showDock" hidden>Player anzeigen</button></div></div>
 <details id="chapterList" hidden><summary>Kapitel</summary><div id="trackRows"></div></details>
 <article id="text" lang="de"></article><div id="paged" hidden><div class="paper"><div id="pageWindow"><article id="pageText"></article></div></div><div class="pager"><button id="prevPage">← Zurück</button><span id="pageNumber" aria-live="polite"></span><button id="nextPage">Weiter →</button></div></div></div></section>
