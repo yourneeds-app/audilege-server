@@ -6,6 +6,7 @@
 | SQLite | Used through Python's sqlite3 module. SQLite is in the public domain. |
 | PyInstaller | Used to build and launch the Windows executable. See Lizenzen/PyInstaller.txt for its license and bootloader exception. |
 | Pillow | Used for shelf thumbnails when available. The Windows archive includes its license, which also lists the image libraries used in the binary wheel. |
+| TinyTag 2.1.2 | Bundled for reading common audio formats without FFprobe. MIT license and copyright in tinytag/LICENSE. [Upstream](https://github.com/tinytag/tinytag) |
 | OpenSSL | CPython on Windows includes OpenSSL 3 under the Apache License 2.0. |
 | Audilege artwork | The web interface uses the Audilege player logo and icon from yourneeds. |
 

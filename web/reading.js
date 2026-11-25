@@ -150,7 +150,7 @@ function startReadSession(kind){if(!readStart&&!document.hidden){readStart=Date.
 function finishReadSession(){
   if(!readStart||!publication)return;
   const now=Date.now(),seconds=Math.floor((now-readStart)/1000),start=readStart;readStart=0;
-  if(seconds>0)api("/api/v1/books/files/"+publication.fileId+"/sessions","POST",{sessionId:Array.from(crypto.getRandomValues(new Uint32Array(4))).join("-"),startedAt:new Date(start).toISOString(),endedAt:new Date(now).toISOString(),durationSeconds:seconds,sessionType:readKind}).catch(hint);
+  if(seconds>0)api("api/v1/books/files/"+publication.fileId+"/sessions","POST",{sessionId:Array.from(crypto.getRandomValues(new Uint32Array(4))).join("-"),startedAt:new Date(start).toISOString(),endedAt:new Date(now).toISOString(),durationSeconds:seconds,sessionType:readKind}).catch(hint);
 }
 document.addEventListener("visibilitychange",()=>{
   if(!publication||!isPaged())return;

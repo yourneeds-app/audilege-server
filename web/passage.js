@@ -48,7 +48,7 @@ async function getPassage(pub,index,book) {
   let task=passageCache.get(sec);
   if (!task) {
     const path=sec.path.split("/").map(encodeURIComponent).join("/");
-    task=fetch("/api/v1/epub/"+book.id+"/file/"+path+"?fileId="+pub.fileId).then(async response=>{
+    task=fetch("api/v1/epub/"+book.id+"/file/"+path+"?fileId="+pub.fileId).then(async response=>{
       if (!response.ok) throw Error(tr("Abschnitt konnte nicht geladen werden."));
       return chapterModel(await response.text(),sec.path);
     });

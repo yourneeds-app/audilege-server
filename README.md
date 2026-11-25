@@ -1,6 +1,25 @@
-# Audilege Server 0.4.0
+# Audilege Server 0.4.1
 
 For Windows and Linux, with a German and English web interface. See [the English quick start](README.en.md) and the [release downloads](https://github.com/yourneeds-app/audilege-server/releases).
+
+## Update auf 0.4.1
+
+Den bisherigen Server mit seiner vorhandenen Aufgabe oder seinem Dienst anhalten, den Datenordner sichern und die Programmdateien aus dem neuen Paket in den bisherigen Programmordner übernehmen. Anschließend dieselbe Aufgabe oder denselben Dienst wieder starten. Der vorhandene Aufruf bestimmt weiterhin Bindeadresse, Port, Datenpfad und Worker. Bei einer vorhandenen Installation mit eigenem Autostart ist **Start-Audilege.cmd** nur für eine separate Neueinrichtung gedacht. Den externen Medienbestand separat sichern.
+
+**Vorhandene Sammlung.** Als Admin unter **Verwaltung → Medieneingang → Bibliothek direkt einbinden → Sammlungsordner wählen** den bestehenden Hauptordner auswählen. Der Scanner liest auch Unterordner und benötigt dort nur Leserechte. Pro mehrteiligem Hörbuch einen Titelordner verwenden. EPUB und Hörbuch dürfen im selben Titelordner liegen. Titel, Kapitelindex und Cover werden im Datenordner gespeichert. Wiedergabe und EPUB-Download greifen auf die Quelldateien zu. Beim expliziten Offline-Download eines reinen Hörbuchs entsteht vorübergehend eine vollständige EPUB-Datei im Temp-Verzeichnis des Servers. Abgleichaufträge benötigen eigenen Arbeitsspeicherplatz. Der normale Medieneingang für kopierte Importe bleibt separat. Ein fehlendes Laufwerk behält seinen Katalogeintrag. Bereits importierte Kopien bleiben erhalten. Die Wahl des Sammlungsordners ist dauerhaft und kann mit **Überwachung beenden** zurückgenommen werden.
+
+**Adressen.** Dieselbe Oberfläche funktioniert am lokalen Port, über einen Schul-DNS-Namen und unter einem beliebigen Proxy-Unterpfad. Für den Unterpfad die Adresse mit abschließendem Schrägstrich öffnen. Der Proxy leitet die Form ohne Schrägstrich dorthin um, entfernt das Präfix für das Backend und erhält den öffentlichen Host-Header. Beispiel für eine vorhandene Caddy-Site:
+
+```caddyfile
+redir /medien/audilege /medien/audilege/ 308
+handle_path /medien/audilege/* {
+    reverse_proxy 127.0.0.1:8472
+}
+```
+
+Das Proxyziel ist die vom Proxy erreichbare Adresse des Audilege-Prozesses. Bestehende Caddy-Routen, Zertifikate und Windows-Aufgaben sind installationsspezifisch. In Android die vollständige Adresse einschließlich Unterpfad angeben. Ein lokaler Name wie audilege.local muss im Netzwerk auflösbar sein.
+
+**Statistik.** App- und Websitzungen sowie Audiobookshelf-Importe bilden je Profil einen Verlauf. Eindeutige gleiche Buchtitel werden gemeinsam angezeigt. Identische Hörsitzungen mit übereinstimmender Zuordnung und Sitzungskennung oder gleichem Startzeitpunkt und gleicher Dauer zählen einmal. Gleicher Titel und Tag allein reichen dafür nicht aus. Aktuelle und längste Serie zählen aufeinanderfolgende Tage mit Hör-, Lese- oder Vorlesezeit. Bis zum Ende des heutigen Tages kann die gestern aktive Serie fortgesetzt werden. Audilege-Sitzungen verwenden das Serverkonto mit UTC, Importe behalten den von Audiobookshelf gelieferten Kalendertag. Android ab 0.4.20 übernimmt die zusammengeführten Zeiten und Titel, auch für importierte Bücher außerhalb des Katalogs.
 
 ## Neu in 0.4.0
 

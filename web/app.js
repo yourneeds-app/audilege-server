@@ -13,6 +13,9 @@ function message(s){$("message").textContent=s;}
 function hint(e){message(e.message);}
 async function api(path,method="GET",data){
   const options={method};
+  if(path==="web/login"||path==="web/logout"){
+    data={...data,cookiePath:new URL(".",document.baseURI).pathname};
+  }
   if(data!==undefined){options.headers={"Content-Type":"application/json"};options.body=JSON.stringify(data);}
   const r=await fetch(path,options);
   const v=await r.json();
@@ -32,7 +35,7 @@ let refreshSequence=0;
 async function refresh(initial=false){
   const sequence=++refreshSequence;
   const preview=initial&&shelfPage==="start";
-  const result=await api("/web/library"+(preview?"?view=start":""));
+  const result=await api("web/library"+(preview?"?view=start":""));
   if(sequence!==refreshSequence)return;
   books=result.books;subscriptions=result.subscriptions;shelfRevision=JSON.stringify(result.revision);
   account=result.account;sources=result.sources||{};$("accountName").textContent=account.name;$("usersNav").hidden=!account.is_admin;
@@ -46,7 +49,7 @@ async function refresh(initial=false){
     row.append(el("span",j.title+" · "+({waiting:tr("In Warteschlange"),running:j.note||tr("Abgleich wird gestartet"),failed:j.note}[j.state])));
     if(j.state==="failed"){
       const retry=el("button",tr("Erneut versuchen"));
-      retry.onclick=async()=>{retry.disabled=true;try{await api("/web/jobs/"+j.id+"/retry","POST",{});await refresh();}catch(e){hint(e);retry.disabled=false;}};
+      retry.onclick=async()=>{retry.disabled=true;try{await api("web/jobs/"+j.id+"/retry","POST",{});await refresh();}catch(e){hint(e);retry.disabled=false;}};
       row.append(retry);
     }
     jobs.append(row);
@@ -101,7 +104,7 @@ $("bookSearch").oninput=renderShelf;
 setInterval(async()=>{
   if(!account||document.hidden||$("shelf").hidden||document.querySelector("dialog[open]"))return;
   try{
-    const revision=await api("/web/library/revision");
+    const revision=await api("web/library/revision");
     if(JSON.stringify(revision)!==shelfRevision)await refresh();
   }catch(e){hint(e);}
 },15000);
@@ -141,11 +144,11 @@ $("importForm").onsubmit=async e=>{
     const files=[...$("files").files].sort((a,b)=>a.name.localeCompare(b.name,"de",{numeric:true}));const ids=[];
     for(const [i,f] of files.entries()){
       $("importStatus").textContent=tr("Übertrage ")+(i+1)+tr(" von ")+files.length+" · "+f.name;
-      const r=await fetch("/web/uploads?name="+encodeURIComponent(f.name),{method:"POST",body:f});const v=await r.json();if(!r.ok)throw new Error(v.error);ids.push(v.upload);
+      const r=await fetch("web/uploads?name="+encodeURIComponent(f.name),{method:"POST",body:f});const v=await r.json();if(!r.ok)throw new Error(v.error);ids.push(v.upload);
     }
     $("importStatus").textContent=tr("Dateien prüfen …");
-    if(convertBook)await api("/web/align","POST",{book:convertBook.id,files:ids,language:$("lang").value,companion:Number($("companion").value)||null});
-    else await api("/web/books","POST",{files:ids,category:$("type").value,title:$("newTitle").value,author:$("newAuthor").value});
+    if(convertBook)await api("web/align","POST",{book:convertBook.id,files:ids,language:$("lang").value,companion:Number($("companion").value)||null});
+    else await api("web/books","POST",{files:ids,category:$("type").value,title:$("newTitle").value,author:$("newAuthor").value});
     $("importDialog").close();await home();
   }catch(error){$("importStatus").textContent=error.message;}finally{$("importGo").disabled=false;}
 };
@@ -155,13 +158,15 @@ function duration(sec){
 function progressText(p){return p==null?"":Math.round(100*p)+" %";}
 async function statistics(){
   await closeReader();show("statistics");
-  const s=await api("/web/statistics"),body=$("statsBody");body.replaceChildren();
+  const s=await api("web/statistics"),body=$("statsBody");body.replaceChildren();
   function section(title,rows){if(!rows.length)return;body.append(el("h2",title));const panel=el("div",null,"panel");body.append(panel);
     for(const [name,value] of rows){const row=el("div",null,"row");row.append(el("span",name),el("strong",value));panel.append(row);}
   }
   listeningDashboard(body,s);
-  section("Audilege",s.native.map(r=>[r.title+" · "+({read:tr("Lesen"),listen:tr("Hören"),tts:tr("Vorlesen")}[r.kind]),duration(r.seconds)]));
-  section(tr("Hörzeit aus Audiobookshelf"),s.imported.map(r=>[r.title,duration(r.seconds)]));
+  for(const [kind,label] of [["listen","Hören"],["read","Lesen"],["tts","Vorlesen"]]){
+    const rows=Object.values(s.activities[kind]?.books||{}).sort((a,b)=>b.millis-a.millis);
+    section(tr(label),rows.map(r=>[r.title,duration(r.millis/1000)]));
+  }
   section(tr("Fortschritt aus Audiobookshelf"),s.positions.map(r=>[r.title,[r.finished?tr("Abgeschlossen"):"",r.ebook!=null?tr("Lesen ")+progressText(r.ebook):"",r.audio!=null?tr("Hören ")+progressText(r.audio):""].filter(Boolean).join(" · ")]));
 }
 $("absOpen").onclick=()=>{absData=null;$("absFile").value="";$("absGo").disabled=true;$("preview").textContent="";$("absDialog").showModal();};
@@ -170,13 +175,13 @@ $("absFile").onchange=async()=>{
   const seq=++previewId;$("absGo").disabled=true;absData=null;
   try{const file=$("absFile").files[0];if(!file)return;
     if(file.size>32*1024*1024)throw new Error(tr("Die Datei ist größer als 32 MB."));
-    const data=JSON.parse(await file.text()),r=await api("/web/abs/preview","POST",data);
+    const data=JSON.parse(await file.text()),r=await api("web/abs/preview","POST",data);
     if(seq!==previewId)return;absData=data;$("preview").textContent=r.source+"\n"+r.newSessions+tr(" neue Hörsitzungen · ")+duration(r.addedSeconds)+" zusätzliche Hörzeit\n"+r.progressRecords+tr(" Fortschrittseinträge");
     $("absGo").disabled=false;
   }catch(e){if(seq===previewId)$("preview").textContent=e.message;}
 };
 $("absGo").onclick=async()=>{if(!absData)return;$("absGo").disabled=true;
-  try{await api("/web/abs/import","POST",absData);$("absDialog").close();await statistics();message(tr("Statistik importiert."));}
+  try{await api("web/abs/import","POST",absData);$("absDialog").close();await statistics();message(tr("Statistik importiert."));}
   catch(e){$("preview").textContent=e.message;$("absGo").disabled=false;}
 };
 function section(){return publication.sections[chapter];}
@@ -195,11 +200,13 @@ function offsetOf(index){return cueTimes(cues)[Math.max(0,index)]||0;}
 function within(){const c=cues[cueIndex];return c?Math.max(0,Math.min(c.end-c.begin,(pendingSeek??media.currentTime)-c.begin)):0;}
 const resumeTab=sessionStorage.getItem("audilege-resume-tab")||Array.from(crypto.getRandomValues(new Uint32Array(3))).join("-");
 sessionStorage.setItem("audilege-resume-tab",resumeTab);
-function resumePrefix(){return "audilege-position:"+encodeURIComponent(account.name)+":";}
+function resumePrefix(){const mount=new URL(".",document.baseURI).pathname;
+  const scope=mount==="/"?"":"mount="+encodeURIComponent(mount)+":";
+  return "audilege-position:"+scope+encodeURIComponent(account.name)+":";}
 async function sendPosition(key){
   const raw=localStorage.getItem(key);if(!raw)return;
   const item=JSON.parse(raw),entry=item.entry;
-  let result=(await api("/api/v1/reading-progress","PUT",{writes:[entry]})).results[0];
+  let result=(await api("api/v1/reading-progress","PUT",{writes:[entry]})).results[0];
   if(result.status==="superseded"){
     const p=result.progress;
     const local=tr("Dieses Gerät")+" · "+Math.round(entry.percentage)+" %",remote="Server · "+Math.round(p.percentage)+" %";
@@ -209,7 +216,7 @@ async function sendPosition(key){
       const keep=confirm(item.title+"\n"+local+"\n"+remote+"\n\n"+tr("Gerätestand übernehmen? Abbrechen übernimmt den Serverstand."));
       if(keep){
         entry.editedAt=p.updatedAt;
-        result=(await api("/api/v1/reading-progress","PUT",{writes:[entry]})).results[0];
+        result=(await api("api/v1/reading-progress","PUT",{writes:[entry]})).results[0];
         if(result.status!=="saved")throw Error(tr("Der Stand wurde erneut geändert."));
       }else if(publication?.fileId===entry.fileId){
         media.pause();dirty=false;loading=true;message(tr("Serverstand übernommen. Öffne den Titel erneut."));
@@ -258,7 +265,7 @@ function recordListening(){
   const end=Date.now(),start=segmentStart;segmentStart=null;
   const seconds=Math.floor((end-start)/1000);if(seconds<1)return;
   const sessionId=Array.from(crypto.getRandomValues(new Uint32Array(4))).join("-");
-  api("/api/v1/books/files/"+publication.fileId+"/sessions","POST",{sessionId,startedAt:new Date(start).toISOString(),endedAt:new Date(end).toISOString(),durationSeconds:seconds,sessionType:"listen"}).catch(hint);
+  api("api/v1/books/files/"+publication.fileId+"/sessions","POST",{sessionId,startedAt:new Date(start).toISOString(),endedAt:new Date(end).toISOString(),durationSeconds:seconds,sessionType:"listen"}).catch(hint);
 }
 async function closeReader(){
   if(!current)return;
@@ -301,7 +308,7 @@ $("mode").onchange=()=>{localStorage.setItem("audilege-mark",$("mode").value);hi
 function setCue(i,offset=0,play=false){
   cueIndex=i;const c=cues[i];if(!c)return;highlight();
   loadedChapter=chapter;
-  const url="/api/v1/epub/"+current.id+"/media-overlay/file/"+c.path.split("/").map(encodeURIComponent).join("/")+"?fileId="+publication.fileId;
+  const url="api/v1/epub/"+current.id+"/media-overlay/file/"+c.path.split("/").map(encodeURIComponent).join("/")+"?fileId="+publication.fileId;
   const t=c.begin+Math.max(0,Math.min(offset,c.end-c.begin));
   if(url!==loadedAudio){
     loadedAudio=url;pendingSeek=t;
@@ -363,14 +370,14 @@ async function openReader(book,resume=false,requestedMode=null){
   $("readerTitle").textContent=book.title;$("author").textContent=book.authors.map(a=>a.name).join(", ");
   $("convert").hidden=!["audio","ebook"].includes(book.category);
   $("download").hidden=!["ebook","audilege"].includes(book.category);
-  $("download").href="/api/v1/books/files/"+book.files[0].id+"/download";
+  $("download").href="api/v1/books/files/"+book.files[0].id+"/download";
   configureBook();
   $("reader").dataset.mode="detail";$("detailHero").hidden=false;$("activeBook").hidden=true;$("readerModes").hidden=true;
   $("back").textContent=category==="podcast"?"← Podcasts":tr("← Bibliothek");
   if(!resume)return;
-  const pub=await api("/web/editions/"+book.id);
+  const pub=await api("web/editions/"+book.id);
   if(request!==readerRequest)return;
-  const row=(await api("/api/v1/reading-progress?fileId="+pub.fileId)).items[0];
+  const row=(await api("api/v1/reading-progress?fileId="+pub.fileId)).items[0];
   if(request!==readerRequest)return;
   loading=true;publication=pub;position=row;dirty=false;
   const recentText=row.text.updatedAt && (!row.narration.updatedAt||row.text.updatedAt>row.narration.updatedAt);
@@ -411,6 +418,6 @@ $("folderBack").onclick=()=>{resetShelf();renderShelf();};
 $("statsNav").onclick=()=>statistics().catch(hint);
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>b.closest("dialog").close());
 async function enter(){await refresh(true);$("loginView").hidden=true;$("shell").hidden=false;await retryPositions();}
-$("loginForm").onsubmit=async e=>{e.preventDefault();try{await api("/web/login","POST",Object.fromEntries(new FormData(e.target)));e.target.reset();$("loginError").textContent="";await enter();}catch(e){$("loginError").textContent=e.message;}};
-$("logout").onclick=async()=>{try{await closeReader();await api("/web/logout","POST",{});location.reload();}catch(e){hint(e);}};
+$("loginForm").onsubmit=async e=>{e.preventDefault();try{await api("web/login","POST",Object.fromEntries(new FormData(e.target)));e.target.reset();$("loginError").textContent="";await enter();}catch(e){$("loginError").textContent=e.message;}};
+$("logout").onclick=async()=>{try{await closeReader();await api("web/logout","POST",{});location.reload();}catch(e){hint(e);}};
 document.addEventListener("DOMContentLoaded",()=>enter().catch(()=>{$("loginView").hidden=false;}));

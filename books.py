@@ -1,5 +1,6 @@
 """Index EPUB spine, cover and SMIL cues and serve individual resources without unzipping to client paths."""
 import hashlib
+import linked_media
 import json
 import math
 import mimetypes
@@ -36,10 +37,10 @@ def resource(folder, name):
 
 
 def xml(folder, name):
-    p = resource(folder, name)
-    if p.stat().st_size > 24 * 1024**2:
-        raise ValueError("Ein Textabschnitt überschreitet 24 MB.")
-    return ET.parse(p).getroot()
+    with linked_media.member(folder,name,resource(folder,name)) as (stream,size):
+        if size > 24 * 1024**2:
+            raise ValueError("Ein Textabschnitt überschreitet 24 MB.")
+        return ET.parse(stream).getroot()
 
 
 def local(node):
@@ -86,7 +87,7 @@ def epub_fields(meta):
     return {k:v[:2000] for k,v in fields.items() if v}
 
 
-def index_epub(epub, folder):
+def index_epub(epub, folder, *, linked=False):
     folder.mkdir(exist_ok=True, parents=True)
     files = {}
     with zipfile.ZipFile(epub) as z:
@@ -98,6 +99,8 @@ def index_epub(epub, folder):
             if posixpath.normpath(name) != name or name.startswith(("/", "../")) or "\\" in name or name in files:
                 raise ValueError("Ungültiger Dateiname im EPUB.")
             files[name] = mimetypes.guess_type(name)[0] or "application/octet-stream"
+            if linked:
+                continue
             with z.open(e) as src, resource(folder, name).open("wb") as dest:
                 shutil.copyfileobj(src, dest, 256 * 1024)
     container = xml(folder, "META-INF/container.xml")
@@ -123,6 +126,13 @@ def index_epub(epub, folder):
         manifest[key] = (path, item.get("media-overlay"))
         if ("cover-image" in item.get("properties", "").split() or key == cover_id) and files[path] in ("image/jpeg","image/png","image/webp"):
             cover = path
+    if linked and cover:
+        with zipfile.ZipFile(epub) as archive:
+            if archive.getinfo(cover).file_size <= 24 * 1024**2:
+                with archive.open(cover) as src, resource(folder,cover).open("wb") as dest:
+                    shutil.copyfileobj(src,dest)
+            else:
+                cover=None
     sections = []
     for item in package.findall(".//{*}spine/{*}itemref"):
         path, overlay = manifest[item.attrib["idref"]]
@@ -167,7 +177,7 @@ def index_epub(epub, folder):
     return result
 
 
-def audio_epub(target, tracks, title, author):
+def audio_epub(target, tracks, title, author, *, linked=False):
     """Give the current Android reader seekable audio chapters in an EPUB media overlay."""
     items, spine, timings = [], [], []
     fields={}
@@ -180,7 +190,12 @@ def audio_epub(target, tracks, title, author):
                 fields=audio_metadata(metadata)
                 title=title or fields.pop("title","") or Path(label).stem
                 author=author or fields.pop("author","")
-                if any(s.get("disposition",{}).get("attached_pic") for s in metadata["streams"]):
+                image=metadata.get("picture")
+                if image and len(image)<=24*1024**2 and image.startswith((b"\xff\xd8",b"\x89PNG")):
+                    cover,mime=("cover.jpg","image/jpeg") if image.startswith(b"\xff\xd8") else ("cover.png","image/png")
+                    z.writestr(cover,image)
+                    items.append(f'<item id="cover" href="{cover}" media-type="{mime}" properties="cover-image"/>')
+                elif any(s.get("disposition",{}).get("attached_pic") for s in metadata["streams"]):
                     picture=subprocess.run(command(track,"--cover"),capture_output=True,timeout=60)
                     if picture.returncode==0 and picture.stdout.startswith(b"\xff\xd8"):
                         z.writestr("cover.jpg",picture.stdout)
@@ -194,7 +209,10 @@ def audio_epub(target, tracks, title, author):
             items += [f'<item id="p{i}" href="{i}.xhtml" media-type="application/xhtml+xml" media-overlay="s{i}"/>',f'<item id="s{i}" href="{i}.smil" media-type="application/smil+xml"/>', f'<item id="a{i}" href="{audio}" media-type="{mime}"/>']
             spine.append(f'<itemref idref="p{i}"/>')
             timings.append(f'<meta property="media:duration" refines="#s{i}">{duration:.3f}s</meta>')
-            z.write(track,audio)
+            if linked:
+                z.writestr(audio,b'')
+            else:
+                z.write(track,audio)
             z.writestr(f"{i}.xhtml",f'<html xmlns="http://www.w3.org/1999/xhtml"><head><title>{escape(label)}</title></head><body><h1 id="track">{escape(label)}</h1></body></html>')
             z.writestr(f"{i}.smil",f'<smil xmlns="http://www.w3.org/ns/SMIL" version="3.0"><body><seq><par><text src="{i}.xhtml#track"/><audio src="{audio}" clipBegin="0s" clipEnd="{duration:.3f}s"/></par></seq></body></smil>')
         z.writestr("book.opf", f'<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">urn:audilege:{target.parent.name}</dc:identifier><dc:title>{escape(title)}</dc:title><dc:creator>{escape(author)}</dc:creator><dc:language>de</dc:language>{"".join(timings)}</metadata><manifest>{"".join(items)}</manifest><spine>{"".join(spine)}</spine></package>')

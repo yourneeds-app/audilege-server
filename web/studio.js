@@ -15,13 +15,13 @@ document.querySelector(".coverEditor").append(labelControl(tr("Verwendung"),role
 const adminMenu=el("div",null,"adminActions");$("users").querySelector("header").after(adminMenu);
 adminMenu.append(action(tr("Bibliothek prüfen"),aiStudio),action(tr("Speicher & System"),systemStudio));
 async function adminJobs(){
-  const result=await api("/web/admin/jobs"),box=sheet(tr("Aufträge"));
+  const result=await api("web/admin/jobs"),box=sheet(tr("Aufträge"));
   if(!result.jobs.length)box.append(el("p",tr("Noch keine Einträge vorhanden.")));
   for(const j of result.jobs){const row=el("section");row.append(el("strong",j.title),el("p",j.note||({done:tr("Abgeschlossen"),running:tr("Prüfung läuft"),waiting:tr("In Warteschlange"),failed:tr("Prüfung unterbrochen")}[j.state])));
-    if(j.state==="failed")row.append(tool(tr("Erneut versuchen"),async()=>{await api("/web/admin/jobs/"+j.id+"/retry","POST",{});await adminJobs();}));box.append(row);}
+    if(j.state==="failed")row.append(tool(tr("Erneut versuchen"),async()=>{await api("web/admin/jobs/"+j.id+"/retry","POST",{});await adminJobs();}));box.append(row);}
 }
 adminMenu.append(action(tr("Aufträge"),adminJobs));
-const aiApi=(path,d)=>api("/web/admin/ai/"+path,d===undefined?"GET":"POST",d);
+const aiApi=(path,d)=>api("web/admin/ai/"+path,d===undefined?"GET":"POST",d);
 let reviewPoll;
 studio.addEventListener("close",()=>{if(!studio.open){clearTimeout(reviewPoll);studioBody.replaceChildren();}});
 async function aiStudio(){
@@ -63,25 +63,30 @@ async function aiSettings(s){
   box.append(line(tool(tr("Speichern & Modelle laden"),async()=>{await store();key.value="";clearKey.checked=false;const r=await aiApi("models",{});models.replaceChildren(...r.models.map(m=>new Option(m,m)));studioNote.textContent=r.models.length+tr(" Modelle");model.focus();}),tool(tr("Speichern"),async()=>{await store();await aiStudio();},"primary")));
 }
 function windowSources(){return sources;}
-async function folderPicker(path=""){
-  const r=await api("/web/admin/directories?path="+encodeURIComponent(path)),box=sheet(tr("Medienordner wählen"));
+async function folderPicker(path="",linked=false){
+  const r=await api("web/admin/directories?path="+encodeURIComponent(path)),box=sheet(tr("Medienordner wählen"));
   box.append(el("p",r.path||tr("Laufwerke")));
   if(r.path)box.append(el("small",new Intl.NumberFormat(uiLanguage,{maximumFractionDigits:1}).format(r.free/1073741824)+(uiLanguage==="de"?" GB frei":" GB available")),
-    line(tool(tr("Übergeordneter Ordner"),()=>folderPicker(r.parent)),tool(tr("Diesen Ordner wählen"),async()=>{
-      const before=await api("/web/admin/inbox");
-      if(r.path!==before.folder&&!confirm(before.folder+" → "+r.path+"\n"+(uiLanguage==="de"?"Neue Dateien hier automatisch einlesen?":"Automatically scan new files here?")))return;
-      await api("/web/admin/inbox","POST",{folder:r.path});studio.close();await inboxStatus();})));
-  for(const folder of r.folders)box.append(tool(folder.split(/[\\/]/).filter(Boolean).at(-1)||folder,()=>folderPicker(folder)));
+    line(tool(tr("Übergeordneter Ordner"),()=>folderPicker(r.parent,linked)),tool(tr("Diesen Ordner wählen"),async()=>{
+      const before=await api("web/admin/inbox");
+      const previous=linked?before.linkedFolder:before.folder;
+      if(r.path!==previous&&!confirm(previous+" → "+r.path+"\n"+(uiLanguage==="de"?"Neue Dateien hier automatisch einlesen?":"Automatically scan new files here?")))return;
+      await api("web/admin/inbox","POST",linked?{linkedFolder:r.path}:{folder:r.path});studio.close();await inboxStatus();})));
+  for(const folder of r.folders)box.append(tool(folder.split(/[\\/]/).filter(Boolean).at(-1)||folder,()=>folderPicker(folder,linked)));
 }
+$("linkedBrowse").onclick=()=>folderPicker("",true).catch(hint);
+$("linkedStop").onclick=async()=>{
+  try{await api("web/admin/inbox","POST",{linkedFolder:""});await inboxStatus();}catch(err){hint(err);}
+};
 $("folderDetails").append(action(tr("Ordner durchsuchen"),()=>folderPicker()));
 async function systemStudio(){
-  const s=await api("/web/admin/system"),box=sheet(tr("Speicher & System"));box.append(el("h3",tr("Mitlesefassungen")));
+  const s=await api("web/admin/system"),box=sheet(tr("Speicher & System"));box.append(el("h3",tr("Mitlesefassungen")));
   if(!s.retention.length)box.append(el("p",tr("Keine offenen Speicherentscheidungen.")));
   for(const r of s.retention){
     const row=el("section");row.append(el("strong",r.title));
-    const change=async(action,confirmed=false)=>{await api("/web/admin/retention","POST",{job:r.job,action,confirmed});await systemStudio();};
+    const change=async(action,confirmed=false)=>{await api("web/admin/retention","POST",{job:r.job,action,confirmed});await systemStudio();};
     if(["pending","keep","restore"].includes(r.decision))row.append(line(r.decision==="pending"?tool(tr("Alle Dateien behalten"),()=>change("keep")):el("small",tr("Originale erhalten")),tool(tr("Nur Mitlesefassung behalten …"),async()=>{
-      const p=await api("/web/admin/retention","POST",{job:r.job,action:"preview"}),view=sheet(tr("Originale in den Papierkorb verschieben"));
+      const p=await api("web/admin/retention","POST",{job:r.job,action:"preview"}),view=sheet(tr("Originale in den Papierkorb verschieben"));
       for(const f of p.files)view.append(el("p",f.name+" · "+f.path+" · "+Math.ceil(f.bytes/1048576)+" MB"));
       view.append(line(tool(tr("Abbrechen"),systemStudio),tool(tr("In Papierkorb verschieben"),()=>change("trash",true))));
     })));else if(r.decision==="trash")row.append(line(tool(tr("Originale wiederherstellen"),()=>change("restore")),tool(uiLanguage==="de"?"Endgültig löschen":"Delete permanently",async()=>{
@@ -90,9 +95,9 @@ async function systemStudio(){
     box.append(row);
   }
   box.append(el("h3",tr("Sicherung & Wiederherstellung")),el("p",tr("Bei beendetem Server: AudilegeServer.exe --backup ZIELORDNER oder --restore SICHERUNG. Eine Wiederherstellung bewahrt den vorherigen Bestand separat auf.")));
-  box.append(tool(tr("Nach Updates suchen"),async()=>{const v=await api("/web/admin/updates");const a=el("a","GitHub-Releases");a.href=v.url;studioNote.replaceChildren(document.createTextNode(v.installed+" → "+v.latest+" · "),a);}));
+  box.append(tool(tr("Nach Updates suchen"),async()=>{const v=await api("web/admin/updates");const a=el("a","GitHub-Releases");a.href=v.url;studioNote.replaceChildren(document.createTextNode(v.installed+" → "+v.latest+" · "),a);}));
   const [dailyLabel,daily]=check(tr("Täglich nach Updates suchen"),s.daily);
-  daily.onchange=()=>api("/web/admin/updates","POST",{enabled:daily.checked}).catch(hint);box.append(dailyLabel);
+  daily.onchange=()=>api("web/admin/updates","POST",{enabled:daily.checked}).catch(hint);box.append(dailyLabel);
   if(s.checked?.latest)box.append(el("p",s.version+" → "+s.checked.latest));
   const smtp=el("details");smtp.append(el("summary",tr("Passwortwiederherstellung per E-Mail")));box.append(smtp);
   const cfg=s.smtp,[l,en]=check(tr("E-Mail-Wiederherstellung aktivieren"),cfg.enabled);smtp.append(l);const fields={};
@@ -100,27 +105,27 @@ async function systemStudio(){
     fields[k]=input(k==="port"?"number":"text",cfg[k]||(k==="port"?587:""));smtp.append(labelControl(label,fields[k]));
   }
   smtp.append(el("p",tr("Das SMTP-Passwort wird auf dem Server als AUDILEGE_SMTP_PASSWORD hinterlegt.")));
-  const recipient=input("email");smtp.append(tool(tr("Speichern"),async()=>{await api("/web/admin/smtp","POST",Object.assign({enabled:en.checked},Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,v.value]))));studioNote.textContent=tr("Gespeichert.");}),labelControl(tr("Testempfänger"),recipient),tool(tr("Testmail senden"),async()=>{await api("/web/admin/smtp","POST",{test:recipient.value});studioNote.textContent=tr("Testmail gesendet.");}));
+  const recipient=input("email");smtp.append(tool(tr("Speichern"),async()=>{await api("web/admin/smtp","POST",Object.assign({enabled:en.checked},Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,v.value]))));studioNote.textContent=tr("Gespeichert.");}),labelControl(tr("Testempfänger"),recipient),tool(tr("Testmail senden"),async()=>{await api("web/admin/smtp","POST",{test:recipient.value});studioNote.textContent=tr("Testmail gesendet.");}));
 }
 const info=el("details",null,"panel");info.id="infoPanel";info.append(el("summary",tr("Info & Updates")));
 const github=el("a","Audilege Server · GitHub");github.href="https://github.com/yourneeds-app/audilege-server";
 info.append(github,el("p",tr("Python · SQLite · PyInstaller (Windows). Der optionale Abgleich verwendet STAlign, Ghost Story, FFmpeg und ein separat geladenes Sprachmodell.")));
 $("settingsView").append(info);
 async function recoveryScreen(){
-  const cfg=await api("/web/recovery/available","POST",{});
+  const cfg=await api("web/recovery/available","POST",{});
   if(!cfg.enabled)return;
-  const request=action(tr("Passwort vergessen?"),()=>{const box=sheet(tr("Passwort zurücksetzen")),name=input();box.append(labelControl(tr("Benutzername oder bestätigte E-Mail-Adresse"),name),tool(tr("Link anfordern"),async()=>{await api("/web/recovery/forgot","POST",{name:name.value});studioNote.textContent=tr("Wenn ein bestätigtes Konto existiert, erhältst du eine E-Mail.");}));});
+  const request=action(tr("Passwort vergessen?"),()=>{const box=sheet(tr("Passwort zurücksetzen")),name=input();box.append(labelControl(tr("Benutzername oder bestätigte E-Mail-Adresse"),name),tool(tr("Link anfordern"),async()=>{await api("web/recovery/forgot","POST",{name:name.value});studioNote.textContent=tr("Wenn ein bestätigtes Konto existiert, erhältst du eine E-Mail.");}));});
   $("loginForm").after(request);
-  $("profileView").append(action(tr("E-Mail-Adresse bestätigen"),()=>{const box=sheet(tr("E-Mail-Adresse bestätigen")),email=input("email");box.append(labelControl(tr("E-Mail-Adresse"),email),tool(tr("Bestätigungslink senden"),async()=>{await api("/web/profile/email","POST",{email:email.value});studioNote.textContent=tr("Bestätigungslink versandt.");}));}));
+  $("profileView").append(action(tr("E-Mail-Adresse bestätigen"),()=>{const box=sheet(tr("E-Mail-Adresse bestätigen")),email=input("email");box.append(labelControl(tr("E-Mail-Adresse"),email),tool(tr("Bestätigungslink senden"),async()=>{await api("web/profile/email","POST",{email:email.value});studioNote.textContent=tr("Bestätigungslink versandt.");}));}));
   const m=/^#(reset|verify)=([A-Za-z0-9_-]+)$/.exec(location.hash);if(!m)return;
   history.replaceState(null,"",location.pathname+location.search);
   const box=sheet(m[1]==="reset"?tr("Neues Passwort"):tr("E-Mail-Adresse bestätigen")),pw=input("password");
   if(m[1]==="reset"){pw.autocomplete="new-password";box.append(labelControl(tr("Neues Passwort"),pw));}
-  box.append(tool(tr("Bestätigen"),async()=>{await api("/web/recovery/"+m[1],"POST",{code:m[2],password:pw.value});studio.close();$("loginError").textContent=tr("Gespeichert.");}));
+  box.append(tool(tr("Bestätigen"),async()=>{await api("web/recovery/"+m[1],"POST",{code:m[2],password:pw.value});studio.close();$("loginError").textContent=tr("Gespeichert.");}));
 }
 recoveryScreen().catch(()=>{});
 async function deviceSheet(uid=null){
-  const path=uid?"/web/admin/users/"+uid+"/devices":"/web/profile/devices";
+  const path=uid?"web/admin/users/"+uid+"/devices":"web/profile/devices";
   const state=await api(path),box=sheet(tr("Gerätesitzungen"));
   for(const d of state.items)box.append(line(el("span",d.agent),tool(tr("Sitzung beenden"),async()=>{
     await api(path,"POST",{device:d.device});try{await deviceSheet(uid);}catch{location.reload();}

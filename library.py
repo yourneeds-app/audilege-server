@@ -11,6 +11,7 @@ import sys
 import time
 import uuid
 import curation
+import linked_media
 import maintenance
 from contextlib import contextmanager, closing
 from datetime import datetime, timezone
@@ -271,6 +272,7 @@ class Library:
     def publish(self,folder,book,category,info,job=None,podcast=None,scan=None,originals=None):
         with self.db() as db:
             db.execute("BEGIN IMMEDIATE")
+            last_edition=None
             if scan:
                 incoming=info.get("metadata",{})|{"title":info["title"],"author":info["author"]}
                 previous=db.execute("SELECT book,signature,source_tags FROM scanned_media WHERE source=?",(scan[0],)).fetchone()
@@ -278,9 +280,10 @@ class Library:
                     if previous["signature"]==scan[1]:
                         raise ValueError("Dateien wurden bereits eingelesen.")
                     book=previous["book"]
-                    active=db.execute("SELECT title,author,metadata,category,merged_into FROM books WHERE id=?",(book,)).fetchone()
+                    active=db.execute("SELECT title,author,metadata,category,merged_into,edition FROM books WHERE id=?",(book,)).fetchone()
                     if active["category"]!=category or active["merged_into"]:
                         raise ValueError("Die Bibliotheksfassung wurde inzwischen umgewandelt. Geänderte Quelle separat importieren.")
+                    last_edition=active["edition"]
                     old=json.loads(previous["source_tags"])
                     merged=json.loads(active["metadata"])|{"title":active["title"],"author":active["author"]}
                     for key in old.keys() | incoming.keys():
@@ -311,6 +314,8 @@ class Library:
                 prune(db,podcast["feed"],podcast["order"])
             if podcast:
                 db.execute("DELETE FROM podcast_building WHERE folder=?",(folder.name,))
+            if last_edition:
+                migrate_positions(self,db,(last_edition,),file,book,info)
             if scan:
                 db.execute("INSERT OR REPLACE INTO scanned_media(source,signature,book,source_tags) VALUES(?,?,?,?)",(*scan,book,json.dumps(incoming)))
             if job:
@@ -329,7 +334,7 @@ class Library:
         tracks = self.files(owner,body["files"])
         return self.import_tracks(tracks, body, podcast=podcast)
 
-    def import_tracks(self,tracks,body,podcast=None,scan=None,verify=None):
+    def import_tracks(self,tracks,body,podcast=None,scan=None,verify=None,link_root=None):
         kind = body["category"]
         folder = self.data/"editions"/uuid.uuid4().hex
         if podcast:
@@ -338,13 +343,24 @@ class Library:
         epub = folder/"book.epub"
         fields={}
         try:
-            if kind=="ebook" and len(tracks)==1 and tracks[0][0].suffix==".epub":
-                shutil.copyfile(tracks[0][0],epub)
-            elif kind in ("audio","podcast") and all(p.suffix in AUDIO for p,_ in tracks):
-                fields=audio_epub(epub,tracks,str(body.get("title") or ""),str(body.get("author") or ""))
+            linked_epub=False
+            links={}
+            if kind=="ebook" and len(tracks)==1 and tracks[0][0].suffix.lower()==".epub":
+                if link_root:
+                    linked_epub=True
+                    epub=tracks[0][0]
+                    links["epub"]=linked_media.describe(link_root,epub)
+                else:
+                    shutil.copyfile(tracks[0][0],epub)
+            elif kind in ("audio","podcast") and all(p.suffix.lower() in AUDIO for p,_ in tracks):
+                if link_root:
+                    links["tracks"]={f"track{i}{p.suffix.lower()}":linked_media.describe(link_root,p) for i,(p,_) in enumerate(tracks)}
+                fields=audio_epub(epub,tracks,str(body.get("title") or ""),str(body.get("author") or ""),linked=bool(link_root))
             else:
                 raise ValueError("Diese Dateien passen nicht zur Rubrik.")
-            info = index_epub(epub,folder)
+            if links:
+                (folder/'linked.json').write_text(json.dumps(links|{'root':str(link_root)}),encoding='utf8')
+            info = index_epub(epub,folder,linked=linked_epub)
             if kind=="ebook" and any(s["cues"] for s in info["sections"]):
                 kind="audilege"
             info["metadata"].update(fields)
@@ -384,9 +400,9 @@ class Library:
             copy_library_audio = None
             if second is not None:
                 ebook,copy_library_audio=(source,other) if kind=="ebook" else (other,source)
-                shutil.copyfile(ebook/"book.epub",job/"source.epub")
+                shutil.copyfile(linked_media.original_epub(ebook),job/"source.epub")
             elif kind=="ebook" and all(p.suffix in AUDIO for p,_ in tracks):
-                shutil.copyfile(source/"book.epub",job/"source.epub")
+                shutil.copyfile(linked_media.original_epub(source),job/"source.epub")
                 for i,(p,_) in enumerate(tracks):
                     shutil.copyfile(p,job/"audio"/f"{i:04}{p.suffix}")
             elif kind=="audio" and len(tracks)==1 and tracks[0][0].suffix==".epub":
@@ -401,7 +417,7 @@ class Library:
                 info = json.loads((copy_library_audio/"index.json").read_text(encoding="utf8"))
                 for i,s in enumerate(info["sections"]):
                     name=s["cues"][0]["path"]
-                    shutil.copyfile(resource(copy_library_audio,name),job/"audio"/f"{i:04}{Path(name).suffix}")
+                    shutil.copyfile(linked_media.track_path(copy_library_audio,name,resource(copy_library_audio,name)),job/"audio"/f"{i:04}{Path(name).suffix}")
             with self.db() as db:
                 db.execute("BEGIN IMMEDIATE")
                 for bid,e in [(book,edition)]+([(companion,second)] if second else []):

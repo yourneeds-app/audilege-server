@@ -3,6 +3,7 @@ import base64
 from contextlib import contextmanager
 from datetime import date, datetime
 from getpass import getpass
+from functools import lru_cache
 import hashlib
 from http import HTTPStatus
 from http.cookies import SimpleCookie
@@ -28,6 +29,8 @@ from metadata import SOURCES, fetch_cover, image_type, search
 from podcasts import Subscriptions, import_episode, preview
 from scanner import Inbox
 import curation
+import linked_media
+from activity import merged
 import maintenance
 
 
@@ -81,26 +84,27 @@ def stats(db,owner):
     positions = [dict(r) for r in db.execute("""SELECT p.*, coalesce((SELECT max(s.title) FROM abs_sessions s
         WHERE s.owner=p.owner AND s.source=p.source AND s.book=p.book AND s.episode=p.episode),nullif(p.label,''),p.book) AS title
         FROM abs_progress p WHERE p.owner=? ORDER BY title""",(owner,))]
-    days = {r[0]:r[1] for r in db.execute("SELECT day,sum(seconds) FROM abs_sessions WHERE owner=? GROUP BY day",(owner,))}
-    for row in db.execute("SELECT substr(start,1,10),sum(seconds) FROM sessions WHERE owner=? GROUP BY 1",(owner,)):
-        days[row[0]] = days.get(row[0],0)+row[1]
     native = [dict(r) for r in db.execute("""SELECT coalesce(b.title,s.archived_title) AS title,s.kind,sum(s.seconds) AS seconds FROM sessions s
         LEFT JOIN editions e ON s.edition=e.id LEFT JOIN books b ON e.book=b.id WHERE s.owner=?
         GROUP BY b.id,s.archived_title,s.kind ORDER BY seconds DESC""",(owner,))]
-    listening = dict(db.execute("""SELECT day,sum(seconds) FROM (
-        SELECT day,seconds FROM abs_sessions WHERE owner=? AND seconds>0 UNION ALL
-        SELECT substr(start,1,10),seconds FROM sessions WHERE owner=? AND kind='listen' AND seconds>0
-        ) GROUP BY day ORDER BY day""",(owner,owner)))
-    events = [dict(row) for row in db.execute("""SELECT title,day,started,kind,seconds FROM (
-        SELECT title,day,started,'listen' AS kind,seconds FROM abs_sessions WHERE owner=?
-        UNION ALL SELECT coalesce(b.title,s.archived_title),substr(s.start,1,10),s.start,s.kind,s.seconds FROM sessions s
-        LEFT JOIN editions e ON e.id=s.edition LEFT JOIN books b ON b.id=e.book WHERE s.owner=?
-        ) WHERE seconds>0 ORDER BY day DESC,julianday(started) DESC,title LIMIT 100""",(owner,owner))]
-    return dict(imported=imported,positions=positions,native=native,days=days,listeningDays=listening,events=events,
-                heardMedia=sum(row["seconds"]>0 for row in imported)+sum(row["seconds"]>0 and row["kind"]=="listen" for row in native))
+    return dict(imported=imported,positions=positions,native=native,**merged(db,owner))
+
+
+@lru_cache(maxsize=1)
+def browser_bundle():
+    scripts = ('locale.js', 'app.js', 'reading.js', 'workspace.js', 'passage.js', 'dashboard.js', 'preferences.js', 'collection.js', 'controls.js', 'studio.js')
+    return b"\n;\n".join((ROOT/"web"/name).read_bytes() for name in scripts)
 
 
 class Handler(BaseHTTPRequestHandler):
+    def web_cookie(self,value,path="/",expired=False):
+        # The proxy may remove the public mount point on the way to this server.
+        if not isinstance(path,str) or not re.fullmatch(r"/(?:[A-Za-z0-9._~%+@-]+/)*",path) or any(p in (".","..") for p in path.split("/")):
+            raise ValueError("Ungültiger Anwendungspfad.")
+        secure="; Secure" if urlsplit(self.headers.get("Origin","")).scheme=="https" else ""
+        age="; Max-Age=0" if expired else ""
+        return f"audilege={value}; Path={path}; HttpOnly; SameSite=Strict{secure}{age}"
+
     server_version = "Audilege/"+maintenance.VERSION
     timeout = 120
     def log_message(self,fmt,*args):
@@ -125,6 +129,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def stream(self,file,mime,sandbox=True,download=False):
         size=file.stat().st_size
+        with file.open("rb") as stream:
+            return self.stream_open(stream,size,mime,sandbox,download)
+
+    def stream_open(self,f,size,mime,sandbox=True,download=False):
         start,end=0,size-1
         headers=[("Accept-Ranges","bytes")]
         if sandbox:
@@ -143,7 +151,7 @@ class Handler(BaseHTTPRequestHandler):
             headers += [("Content-Range",f"bytes {start}-{end}/{size}")]
         self.respond(206 if ranges else 200,mime,end-start+1,headers)
         if self.command!="HEAD":
-            with file.open("rb") as f:
+            if end>=start:
                 f.seek(start)
                 remaining=end-start+1
                 while remaining:
@@ -216,6 +224,11 @@ class Handler(BaseHTTPRequestHandler):
         assets={"/":"index.html","/style.css":"style.css","/interface.css":"interface.css","/app.js":"app.js","/workspace.js":"workspace.js","/reading.js":"reading.js","/audilege.webp":"audilege.webp","/icon.webp":"icon.webp"}
         for name in ("shell.css","passage.js","dashboard.js","preferences.js","collection.js","studio.js","controls.js","locale.js","collection.css"):
             assets["/"+name]=name
+        if method=="GET" and path=="/audilege-ui.js":
+            payload=browser_bundle()
+            self.respond(200,"application/javascript; charset=utf-8",len(payload))
+            if self.command!="HEAD":self.wfile.write(payload)
+            return
         if method=="GET" and path in assets:
             f=ROOT/"web"/assets[path]
             return self.stream(f,mimetypes.guess_type(f.name)[0] or "application/octet-stream",False)
@@ -237,7 +250,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path=="/web/login":
                     cookie=self.lib.token(db,owner,"web",7*86400,device,self.headers.get("User-Agent","Browser"))
                     db.commit()
-                    return self.output({"ok":True},extra=[("Set-Cookie",f"audilege={cookie}; Path=/; HttpOnly; SameSite=Strict")])
+                    return self.output({"ok":True},extra=[("Set-Cookie",self.web_cookie(cookie,data.get("cookiePath","/")))])
                 agent=self.headers.get("User-Agent","Audilege")
                 result={"accessToken":self.lib.token(db,owner,"access",3600,device,agent),"refreshToken":self.lib.token(db,owner,"refresh",90*86400,device,agent)}
                 db.commit()
@@ -295,7 +308,8 @@ class Handler(BaseHTTPRequestHandler):
                     if method=="POST":
                         d=self.body()
                         db.commit()
-                        if "folder" in d:self.server.inbox.change_folder(d["folder"])
+                        if "linkedFolder" in d:self.server.inbox.change_linked(d["linkedFolder"])
+                        elif "folder" in d:self.server.inbox.change_folder(d["folder"])
                         else:self.server.inbox.request()
                     return self.output(self.server.inbox.status())
                 if path=="/web/admin/users" and method=="POST":
@@ -353,7 +367,7 @@ class Handler(BaseHTTPRequestHandler):
                     if db.execute("SELECT category FROM books WHERE id=?",(int(meta[1]),)).fetchone()[0] in ("audio","podcast"):
                         from media_tools import audio_metadata,probe
                         first=next((name for name,typ in mime.items() if typ.startswith("audio/")),None)
-                        if first:result.update(audio_metadata(probe(resource(folder,first))))
+                        if first:result.update(audio_metadata(probe(linked_media.track_path(folder,first,resource(folder,first)))))
                     return self.output(result)
                 if meta and method=="POST":
                     data=self.body();book=int(meta[1])
@@ -388,7 +402,7 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/web/logout" and method=="POST":
                 db.execute("DELETE FROM tokens WHERE hash=?",(hashlib.sha256(self.cookies().encode()).digest(),))
                 db.commit()
-                return self.output({},extra=[("Set-Cookie","audilege=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict")])
+                return self.output({},extra=[("Set-Cookie",self.web_cookie("",self.body().get("cookiePath","/"),expired=True))])
             if path=="/api/v1/auth/me" and method=="GET":
                 return self.output({"username":db.execute("SELECT name FROM users WHERE id=?",(owner,)).fetchone()[0],"settings":{"timezone":"UTC"}})
             if path=="/web/library/revision" and method=="GET":
@@ -530,7 +544,8 @@ class Handler(BaseHTTPRequestHandler):
                 if not r:
                     raise KeyError("Ausgabe unbekannt.")
                 if match[2]=="download" and method=="GET":
-                    return self.stream(self.lib.data/"editions"/r[0]/"book.epub","application/epub+zip",download=True)
+                    with linked_media.downloadable(self.lib.data/"editions"/r[0]) as file:
+                        return self.stream(file,"application/epub+zip",download=True)
                 if match[2]=="sessions" and method=="POST":
                     d=self.body()
                     start,end=[datetime.fromisoformat(d[k].replace("Z","+00:00")) for k in ("startedAt","endedAt")]
@@ -552,12 +567,14 @@ class Handler(BaseHTTPRequestHandler):
                     if name in files:
                         break
                     name=unquote(name)
-                return self.stream(resource(folder,name),files[name])
+                mime=files[name]
+                with linked_media.member(folder,name,resource(folder,name)) as (stream,size):
+                    return self.stream_open(stream,size,mime)
             if path=="/api/v1/user-statistics/daily-reading" and method=="GET":
-                return self.output([{"day":k,"readingSeconds":int(v)} for k,v in sorted(stats(db,owner)["days"].items())])
+                return self.output([{"day":k,"readingSeconds":int(v)} for k,v in sorted(merged(db,owner)["days"].items())])
             if path=="/api/v1/user-statistics/summary" and method=="GET":
                 items=catalog(db,owner)
-                return self.output(dict(trackedBooks=len(items),startedBooks=sum(b["readingProgress"]>0 for b in items),
+                return self.output(dict(audilegeActivities=merged(db,owner)["activities"],trackedBooks=len(items),startedBooks=sum(b["readingProgress"]>0 for b in items),
                     inProgressBooks=sum(0<b["readingProgress"]<100 for b in items),completedBooks=sum(b["readingProgress"]>=100 for b in items)))
             self.output({"error":"Nicht gefunden."},404)
 

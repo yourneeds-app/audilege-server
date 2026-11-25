@@ -47,6 +47,8 @@ class Inbox:
         self.lib=lib
         self.fixed=path is not None
         with lib.db() as db:
+            linked=db.execute("SELECT value FROM server_settings WHERE key='linked_folder'").fetchone()
+            self.linked=Path(linked[0]) if linked and linked[0] else None
             saved=db.execute("SELECT value FROM server_settings WHERE key='media_folder'").fetchone()
         self.root=self.validate(path or (saved[0] if saved else lib.data/"Medieneingang"))
         if self.fixed or not saved:self.root.mkdir(parents=True,exist_ok=True)
@@ -61,7 +63,7 @@ class Inbox:
         self.stopped=Event()
 
     def status(self):
-        with self.lock:return self.state.copy()|{"folder":str(self.pending_root or self.root),"interval":15,"fixed":self.fixed}
+        with self.lock:return self.state.copy()|{"folder":str(self.pending_root or self.root),"linkedFolder":str(self.linked or ""),"interval":15,"fixed":self.fixed}
 
     def validate(self,value):
         root=Path(value).resolve()
@@ -76,16 +78,39 @@ class Inbox:
             child.mkdir(exist_ok=True)
             if not child.is_dir() or not real_entry(child):raise ValueError("Der Medienunterordner ist nicht zugänglich.")
 
+    @staticmethod
+    def separate(a,b):
+        if b and (a.is_relative_to(b) or b.is_relative_to(a)):
+            raise ValueError("Medieneingang und direkt eingebundene Sammlung benötigen getrennte Ordner.")
+
+    def change_linked(self,value):
+        folder=None
+        if value:
+            if not isinstance(value,str) or not Path(value).is_absolute():
+                raise ValueError("Bitte den vollständigen Ordnerpfad auf dem Server eingeben.")
+            folder=self.validate(value)
+            self.separate(folder,self.lib.data)
+            if not folder.is_dir():
+                raise ValueError("Sammlung nicht erreichbar.")
+            with os.scandir(folder):pass
+        with self.lock:
+            if folder:self.separate(folder,self.pending_root or self.root)
+            with self.lib.db() as db:
+                db.execute("INSERT OR REPLACE INTO server_settings VALUES('linked_folder',?)",(str(folder or ""),))
+            self.linked=folder
+        self.request()
+
     def change_folder(self,value):
         if self.fixed:raise ValueError("Der Medienordner ist über den Serverstart festgelegt.")
         if not isinstance(value,str) or not Path(value).is_absolute():
             raise ValueError("Bitte den vollständigen Ordnerpfad auf dem Server eingeben.")
         folder=self.validate(value)
         if not folder.is_dir():raise ValueError("Diesen Ordner kann der Server nicht öffnen.")
-        self.layout(folder)
-        with tempfile.TemporaryFile(dir=folder):pass
-        if not shutil.disk_usage(folder).free:raise ValueError("Kein freier Speicherplatz.")
         with self.lock:
+            self.separate(folder,self.linked)
+            self.layout(folder)
+            with tempfile.TemporaryFile(dir=folder):pass
+            if not shutil.disk_usage(folder).free:raise ValueError("Kein freier Speicherplatz.")
             with self.lib.db() as db:
                 db.execute("INSERT OR REPLACE INTO server_settings VALUES('media_folder',?)",(str(folder),))
             self.pending_root=folder
@@ -114,12 +139,24 @@ class Inbox:
         count,waiting=0,0
         errors=[];observed={}
         try:
-            if not self.root.is_dir():raise OSError("Der überwachte Ordner ist derzeit nicht erreichbar.")
-            errors.extend(self.export_completed())
+            with self.lock:
+                linked=self.linked
+            if self.root.is_dir():
+                errors.extend(self.export_completed())
+            else:
+                errors.append("Der Medieneingang ist derzeit nicht erreichbar.")
+            def sources():
+                for root,reference in ((self.root,None),(linked,linked)):
+                    if root is None:continue
+                    if not root.is_dir() or root.resolve()!=root:
+                        if reference:errors.append("Die direkt eingebundene Sammlung ist derzeit nicht erreichbar.")
+                        continue
+                    for kind,base,files in groups(root):
+                        yield root,reference,kind,base,files
             with self.lib.db() as db:
                 indexed=dict(db.execute("SELECT source,signature FROM scanned_media"))
-            for kind,base,files in groups(self.root):
-                key=os.path.normcase(str(base));rel=str(base.relative_to(self.root))
+            for root,reference,kind,base,files in sources():
+                key=os.path.normcase(str(base));rel=str(base.relative_to(root))
                 try:
                     sig=fingerprint(files);observed[key]=sig
                     if indexed.get(key)==sig:continue
@@ -131,7 +168,7 @@ class Inbox:
                         if fingerprint(files)!=sig:
                             raise InterruptedError("Kopiervorgang läuft noch.")
                     title=base.name if base.is_dir() and len(files)>1 else ""
-                    self.lib.import_tracks([(p,p.name) for p in files],{"category":kind,"title":title},scan=(key,sig),verify=verify)
+                    self.lib.import_tracks([(p,p.name) for p in files],{"category":kind,"title":title},scan=(key,sig),verify=verify,link_root=reference)
                     self.failed.pop(key,None);count+=1
                 except (FileNotFoundError,InterruptedError):
                     waiting+=1

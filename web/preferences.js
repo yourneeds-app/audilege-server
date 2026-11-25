@@ -28,7 +28,7 @@ function renderSidebarCategories(groups){
   }
 }
 $("discoverNav").onclick=()=>{resetShelf();discovering=true;home().catch(hint);};
-$("profileNav").onclick=async()=>{await closeReader();show("profileView");$("profileName").textContent=account.name;$("profileServer").textContent=location.host;};
+$("profileNav").onclick=async()=>{await closeReader();show("profileView");$("profileName").textContent=account.name;$("profileServer").textContent=new URL(".",document.baseURI).href;};
 $("settingsNav").onclick=async()=>{await closeReader();show("settingsView");};
 $("shelfSort").value=localStorage.getItem("audilege-sort")||"new";
 $("shelfSort").onchange=()=>{localStorage.setItem("audilege-sort",$("shelfSort").value);renderShelf();};

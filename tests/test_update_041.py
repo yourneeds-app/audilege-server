@@ -1,0 +1,112 @@
+from datetime import date
+import io
+import json
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import unittest
+from unittest.mock import patch
+import wave
+import zipfile
+
+import test_server
+from activity import merged, streak
+from abs_history import apply_import
+from scanner import Inbox
+
+
+class UpdateTests(unittest.TestCase):
+    setUp=test_server.ServerTest.setUp
+    tearDown=test_server.ServerTest.tearDown
+    call=test_server.ServerTest.call
+
+    def test_linked_collection_resources_offline_download_and_restart(self):
+        with TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            ebook=root/"fiction.EPUB"
+            ebook.write_bytes(test_server.epub(True))
+            audio=root/"Album"
+            audio.mkdir()
+            tracks=[]
+            for n in (1,2):
+                path=audio/f"{n}.WAV"
+                with wave.open(str(path),"wb") as f:
+                    f.setparams((1,2,16000,0,"NONE","NONE"))
+                    f.writeframes(bytes(32000*n))
+                tracks.append(path)
+            for p in [*tracks,ebook]:os.utime(p,(1600000000,1600000000))
+            inbox=Inbox(self.lib)
+            with patch("media_tools.shutil.which",return_value=None):
+                inbox.change_linked(str(root))
+                inbox.scan();inbox.scan()
+            self.assertEqual(inbox.status()["errors"],[])
+            self.assertEqual(inbox.status()["imported"],2)
+            self.assertEqual(set(root.iterdir()),{ebook,audio})
+            self.assertEqual(Inbox(self.lib).status()["linkedFolder"],str(root))
+            inbox.scan()
+            self.assertEqual(inbox.status()["imported"],0)
+            with self.lib.db() as db:
+                items={r["category"]:dict(r) for r in db.execute("SELECT b.*,e.folder FROM books b JOIN editions e ON e.id=b.edition")}
+            self.assertEqual(set(items),{"audilege","audio"})
+            row=items["audio"]
+            folder=self.lib.data/"editions"/row["folder"]
+            self.assertLess(sum(p.stat().st_size for p in folder.iterdir()),tracks[0].stat().st_size)
+            def content(row,path):
+                return self.call(f"/api/v1/epub/{row['id']}/file/{path}?fileId={row['edition']}",headers={"Range":"bytes=0-5"},raw=True)
+            self.assertEqual(content(row,"track0.wav")[2],tracks[0].read_bytes()[:6])
+            def download(row):
+                return self.call(f"/api/v1/books/files/{row['edition']}/download",raw=True)[2]
+            with zipfile.ZipFile(io.BytesIO(download(row))) as archive:
+                self.assertEqual(archive.read("track1.wav"),tracks[1].read_bytes())
+            embedded=items["audilege"]
+            self.assertEqual(download(embedded),ebook.read_bytes())
+            self.assertEqual(content(embedded,"a.mp3")[2],b"synthe")
+            self.assertFalse((self.lib.data/"editions"/embedded["folder"]/"book.epub").exists())
+            with self.assertRaises(ValueError):inbox.change_folder(str(audio))
+            self.assertFalse((audio/"Ebooks").exists())
+            inbox.change_linked("")
+            self.assertEqual(Inbox(self.lib).status()["linkedFolder"],"")
+            self.assertEqual(content(row,"track0.wav")[0],206)
+
+    def test_prefix_form_cookie_and_script_order(self):
+        html=self.call("/",raw=True)[2].decode()
+        self.assertIn('method="post" action="web/login"',html)
+        self.assertNotRegex(html,r'(src|href)="/')
+        self.assertEqual(html.count("<script"),1)
+        bundle=self.call("/audilege-ui.js?v=0.4.1",raw=True)[2]
+        self.assertLess(bundle.index(b"function tr("),bundle.index(b"const categories ="))
+        credentials={"username":"eins","password":"test-fixture-1","cookiePath":"/medien/audilege/"}
+        origin={"Origin":"https://school.example","Host":"school.example"}
+        _,headers,_=self.call("/web/login",credentials,headers=origin,raw=True)
+        self.assertIn("Path=/medien/audilege/;",headers["Set-Cookie"])
+        self.assertIn("; Secure",headers["Set-Cookie"])
+        cookie=headers["Set-Cookie"].split(";")[0]
+        _,out,_=self.call("/web/logout",{"cookiePath":"/medien/audilege/"},headers=origin|{"Cookie":cookie},raw=True)
+        self.assertIn("Path=/medien/audilege/;",out["Set-Cookie"])
+        self.assertIn("Max-Age=0",out["Set-Cookie"])
+
+    def test_merged_history_and_streak_across_sources(self):
+        def imported(sid,day,seconds,started=None):
+            row=dict(id=sid,date=day,timeListening=seconds,displayTitle="Fixture",libraryItemId="abs-book")
+            if started:row["startedAt"]=started
+            return row
+        with self.lib.db() as db:
+            db.execute("INSERT INTO books(id,title,author,category,edition) VALUES(1,'Fixture','A','audio',1)")
+            db.execute("INSERT INTO editions VALUES(1,1,'fixture',NULL)")
+            def native(sid,kind,start,end,sec):
+                db.execute("INSERT INTO sessions(owner,edition,sid,start,end,seconds,kind) VALUES(1,1,?,?,?,?,?)",(sid,start,end,sec,kind))
+            native("app","listen","2024-01-02T12:00:00Z","2024-01-02T12:01:00Z",60)
+            native("web","read","2024-01-02T23:59:57Z","2024-01-03T00:00:03Z",6)
+            payload=dict(format="audilege-abs-1",server="https://abs.example",mediaProgress=[],
+                         sessions=[imported("earlier","2024-01-01",20),imported("replica","2024-01-02",60,1704196800000)])
+            for _ in range(2):apply_import(db,1,payload,True)
+            result=merged(db,1,date(2024,1,4))
+            self.assertEqual(result["heardMedia"],1)
+            self.assertEqual(result["listeningDays"],{"2024-01-01":20,"2024-01-02":60})
+            self.assertEqual(result["days"]["2024-01-03"],3)
+            self.assertEqual(result["streak"],{"current":3,"best":3})
+            self.assertEqual(len(result["events"]),3)
+            self.assertEqual(result["activities"]["listen"]["books"]["orbit:1"]["millis"],80000)
+            self.assertEqual(merged(db,2)["heardMedia"],0)
+            self.assertEqual(streak(result["days"],date(2024,1,5)),{"current":0,"best":3})
+

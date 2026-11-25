@@ -20,6 +20,7 @@ def main():
     name="Audilege-Server-"+VERSION
     archive=dest/(name+"-Windows-x64.zip")
     files=[*ROOT.glob("*.py"), ROOT/"README.md",ROOT/"README.en.md",ROOT/"THIRD_PARTY.md",*ROOT.glob("tests/test_*.py"),
+           *(ROOT/"tinytag").glob("*.py"), ROOT/"tinytag"/"LICENSE",
            *(p for p in (ROOT/"web").iterdir() if p.is_file()),*(p for p in (ROOT/"worker").iterdir() if p.is_file())]
     with TemporaryDirectory(prefix="audilege-package-") as temp:
         work=Path(temp)

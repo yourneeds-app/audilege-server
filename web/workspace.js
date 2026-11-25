@@ -7,7 +7,7 @@ function cover(book,variant="") {
   if(!book.cover&&!(variant==="audio"&&book.category==="audilege"))return fallback();
   const img=el("img",null,"art");img.alt="";img.onerror=()=>img.replaceWith(fallback());
   img.loading="lazy";img.decoding="async";
-  img.src="/api/v1/books/"+book.id+(variant?"/cover?art=":"/thumbnail?size=360&art=")+(variant||(book.category==="audio"||book.category==="podcast"?"audio":"book"))+"&rev="+encodeURIComponent(shelfRevision);return img;
+  img.src="api/v1/books/"+book.id+(variant?"/cover?art=":"/thumbnail?size=360&art=")+(variant||(book.category==="audio"||book.category==="podcast"?"audio":"book"))+"&rev="+encodeURIComponent(shelfRevision);return img;
 }
 function renderResume(visible) {
   const box=$("resume");box.replaceChildren();
@@ -26,7 +26,7 @@ let editedUser=null, ownId=0;
 async function listUsers() {
   await closeReader();show("users");
   selectAdminTab(false);
-  const result=await api("/web/admin/users");ownId=result.self;
+  const result=await api("web/admin/users");ownId=result.self;
   const list=$("userList");list.replaceChildren();
   for(const user of result.users){
     const row=el("div",null,"accountRow"), identity=el("div");
@@ -44,8 +44,10 @@ function selectAdminTab(inbox){
 }
 async function inboxStatus(manual=false){
   clearTimeout(inboxTimer);
-  const state=await api("/web/admin/inbox",manual?"POST":"GET",manual?{}:undefined);
+  const state=await api("web/admin/inbox",manual?"POST":"GET",manual?{}:undefined);
   $("inboxPath").textContent=state.folder;
+  $("linkedPath").textContent=state.linkedFolder||tr("Keine Sammlung eingebunden.");
+  $("linkedStop").hidden=!state.linkedFolder;
   $("folderDetails").hidden=!!state.fixed;
   if(!$("folderDetails").open)$("mediaFolder").value=state.folder;
   $("scanStatus").textContent=[manual?tr("Scan angefordert."):state.running?tr("Scan läuft …"):tr("Automatischer Scan alle ")+state.interval+tr(" Sekunden."),
@@ -60,7 +62,7 @@ $("scanNow").onclick=()=>inboxStatus(true).catch(hint);
 $("folderForm").onsubmit=async e=>{
   e.preventDefault();
   try{
-    await api("/web/admin/inbox","POST",{folder:$("mediaFolder").value.trim()});
+    await api("web/admin/inbox","POST",{folder:$("mediaFolder").value.trim()});
     $("folderDetails").open=false;await inboxStatus();
   }catch(err){message(err.message);}
 };
@@ -76,7 +78,7 @@ $("userForm").onsubmit=async e=>{
   e.preventDefault();const btn=e.submitter;btn.disabled=true;
   try{
     const pw=$("userPassword").value;
-    await api("/web/admin/users"+(editedUser?"/"+editedUser.id:""),"POST",{name:$("userName").value,password:pw,
+    await api("web/admin/users"+(editedUser?"/"+editedUser.id:""),"POST",{name:$("userName").value,password:pw,
       admin:$("userAdmin").checked,enabled:$("userEnabled").checked});
     $("userDialog").close();$("userPassword").value="";
     if(editedUser?.id===ownId&&pw){location.reload();return;}
@@ -135,7 +137,7 @@ $("lookupForm").onsubmit=async e=>{
   if(!opts.length){$("metaStatus").textContent=tr("Bitte einen Suchanbieter auswählen.");return;}
   $("metaStatus").textContent=tr("Kataloge werden durchsucht …");
   try{
-    const r=await api("/web/admin/metadata/search","POST",{term:$("metaTerm").value,sources:opts});
+    const r=await api("web/admin/metadata/search","POST",{term:$("metaTerm").value,sources:opts});
     if(seq!==lookupSeq)return;
     $("metaStatus").textContent=r.matches.length+tr(" Treffer")+(r.unavailable.length?tr(" · Zurzeit nicht erreichbar: ")+r.unavailable.join(", "):"");
     for(const data of r.matches){
@@ -155,14 +157,14 @@ $("metaForm").onsubmit=async e=>{
       data.coverData=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result.split(",")[1]);r.onerror=()=>reject(new Error(tr("Cover konnte nicht gelesen werden.")));r.readAsDataURL(file);});
     }else if($("useCover").checked&&coverCandidate)data.coverUrl=coverCandidate;
     data.coverRole=$("coverRole").value;if($("resetCover").checked)data.resetRole=data.coverRole;
-    await api("/web/admin/metadata/"+current.id,"POST",data);shelfRevision=String(Date.now());
+    await api("web/admin/metadata/"+current.id,"POST",data);shelfRevision=String(Date.now());
     if(data.coverData||data.coverUrl){current.cover=true;delete data.coverData;delete data.coverUrl;}
     current.title=data.title;current.authors=data.author?[{name:data.author}]:[];current.metadata=data;
     $("readerTitle").textContent=data.title;$("author").textContent=data.author;configureBook();$("metadataDialog").close();
   }catch(err){$("metaStatus").textContent=err.message;}
 };
 $("readTags").onclick=async()=>{
-  try{fillMeta(await api("/web/admin/metadata/"+current.id));$("metaStatus").textContent=tr("Dateitags ausgelesen. Änderungen mit Speichern bestätigen.");}
+  try{fillMeta(await api("web/admin/metadata/"+current.id));$("metaStatus").textContent=tr("Dateitags ausgelesen. Änderungen mit Speichern bestätigen.");}
   catch(e){$("metaStatus").textContent=e.message;}
 };
 let feedSeq=0,feedReady="";
@@ -174,7 +176,7 @@ function feedModeUI(){
 $("feedMode").onchange=()=>{resetFeed();feedModeUI();$("importStatus").textContent="";};
 $("feedUrl").oninput=()=>{resetFeed();$("importStatus").textContent="";};
 async function knownFeeds(){
-  const rows=await api("/web/admin/rss/feeds");
+  const rows=await api("web/admin/rss/feeds");
   $("knownFeeds").replaceChildren(...rows.map(r=>new Option(r.title,r.feed)));
   const manager=$("feedManager");manager.replaceChildren();
   const subscriptions=rows.filter(r=>r.id);
@@ -182,7 +184,7 @@ async function knownFeeds(){
   for(const r of subscriptions){
     const row=el("div",null,"feedRow"),label=el("div"),stop=el("button",tr("Abo beenden"));
     label.append(el("strong",r.title),el("small",r.error||(r.checked?tr("Zuletzt geprüft am ")+new Date(r.checked*1000).toLocaleString(uiLanguage):tr("Erster Abruf steht an"))));
-    stop.type="button";stop.onclick=async()=>{stop.disabled=true;try{await api("/web/admin/rss/unsubscribe","POST",{id:r.id});await knownFeeds();$("importStatus").textContent=tr("Abo beendet. Die gespeicherten Folgen bleiben in der Bibliothek.");}catch(e){stop.disabled=false;$("importStatus").textContent=e.message;}};
+    stop.type="button";stop.onclick=async()=>{stop.disabled=true;try{await api("web/admin/rss/unsubscribe","POST",{id:r.id});await knownFeeds();$("importStatus").textContent=tr("Abo beendet. Die gespeicherten Folgen bleiben in der Bibliothek.");}catch(e){stop.disabled=false;$("importStatus").textContent=e.message;}};
     row.append(label,stop);manager.append(row);
   }
 }
@@ -191,7 +193,7 @@ $("previewFeed").onclick=async()=>{
   resetFeed();const seq=feedSeq,url=$("feedUrl").value.trim();
   $("importStatus").textContent=tr("Folgen werden geladen …");
   try{
-    const r=await api("/web/admin/rss/preview","POST",{url});if(seq!==feedSeq)return;
+    const r=await api("web/admin/rss/preview","POST",{url});if(seq!==feedSeq)return;
     feedReady=url;$("importStatus").textContent=r.show+" · "+r.episodes.length+tr(" Folgen");
     const auto=$("feedMode").value==="abo";
     for(const ep of auto?r.episodes.slice(0,5):r.episodes){
@@ -204,7 +206,7 @@ $("previewFeed").onclick=async()=>{
 async function importFeed(){
   if($("feedMode").value==="abo"){
     $("importGo").disabled=true;
-    try{const r=await api("/web/admin/rss/subscribe","POST",{url:$("feedUrl").value.trim()});$("importDialog").close();await home();message("„"+r.title+tr("“ ist abonniert. Audilege lädt die neuesten Folgen im Hintergrund."));}
+    try{const r=await api("web/admin/rss/subscribe","POST",{url:$("feedUrl").value.trim()});$("importDialog").close();await home();message("„"+r.title+tr("“ ist abonniert. Audilege lädt die neuesten Folgen im Hintergrund."));}
     catch(err){$("importStatus").textContent=err.message;}finally{$("importGo").disabled=false;}
     return;
   }
@@ -214,7 +216,7 @@ async function importFeed(){
   try{
     for(let i=0;i<selection.length;i++){
       $("importStatus").textContent=tr("Importiere Folge ")+(i+1)+tr(" von ")+selection.length+" …";
-      await api("/web/admin/rss/import","POST",{url,guid:selection[i].value});selection[i].checked=false;selection[i].disabled=true;
+      await api("web/admin/rss/import","POST",{url,guid:selection[i].value});selection[i].checked=false;selection[i].disabled=true;
     }
     $("importDialog").close();await home();message(selection.length+" Podcastfolge(n) importiert.");
   }catch(e){$("importStatus").textContent=e.message;}finally{$("importGo").disabled=$("previewFeed").disabled=$("feedUrl").disabled=false;}
@@ -238,7 +240,7 @@ function podcastOverview(shelf,term){
     const episode=books.filter(b=>b.podcast?.key===s.key&&b.cover).sort((a,b)=>b.id-a.id)[0];
     const fallback=()=>cover(episode||{title:s.show});
     if(s.cover){
-      const img=el("img",null,"art");img.alt="";img.onerror=()=>img.replaceWith(fallback());img.src="/web/podcasts/"+s.id+"/cover";tile.append(img);
+      const img=el("img",null,"art");img.alt="";img.onerror=()=>img.replaceWith(fallback());img.src="web/podcasts/"+s.id+"/cover";tile.append(img);
     }else tile.append(fallback());
     tile.append(el("strong",s.show));if(s.creator&&s.creator!==s.show)tile.append(el("small",s.creator));
     tile.onclick=()=>openPodcastFolder(s.key);grid.append(tile);

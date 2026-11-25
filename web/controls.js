@@ -33,7 +33,7 @@ preference(readingPrefs,"paper",uiLanguage==="de"?"Papierfarbe":"Page colour",[[
 const returnToAudio=action(tr("Zur Hörstelle"),()=>{followPassage=true;activeSpans[0]?.scrollIntoView({block:"center"});returnToAudio.hidden=true;});returnToAudio.hidden=true;
 const readerMenu=el("details");readerMenu.append(el("summary",tr("Werkzeuge")));
 toolsRow.append(aa,returnToAudio,readerMenu);
-const players=(data)=>api("/web/player",data?"POST":"GET",data);
+const players=(data)=>api("web/player",data?"POST":"GET",data);
 function readerControls(){
   paperToggle.hidden=true;
   const textual=current&&["ebook","audilege"].includes(current.category);

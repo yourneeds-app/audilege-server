@@ -22,6 +22,21 @@ def command(path, mode):
 
 
 def probe(path):
+    if not shutil.which("ffprobe"):
+        from tinytag import TinyTag, TinyTagException
+        try:
+            tag=TinyTag.get(path,image=True)
+            if tag.duration and tag.duration>0:
+                keys=("album","title","artist","albumartist","year","genre","comment")
+                tags={k:getattr(tag,k) for k in keys if getattr(tag,k,None)}
+                if "albumartist" in tags:tags["album_artist"]=tags.pop("albumartist")
+                if "year" in tags:tags["date"]=tags.pop("year")
+                picture=tag.images.any
+                return {"format":{"duration":tag.duration,"tags":tags},"streams":[{"codec_type":"audio"}],
+                        "picture":picture.data if picture else None}
+        except TinyTagException:
+            pass
+
     r=subprocess.run(command(path,"--probe"),capture_output=True,timeout=60,check=True)
     return json.loads(r.stdout)
 

@@ -1,6 +1,12 @@
-# Audilege Server 0.4.0
+# Audilege Server 0.4.1
 
 Keep ebooks, audiobooks, synchronized read-along editions and subscribed podcasts on your own computer. A profile shares positions between the web reader and Audilege for Android. BookOrbit can be used through a separate app profile.
+
+## Upgrade from 0.4.0
+
+Stop the existing server, back up its data folder, and replace the program files in the existing program directory. Restart the same task or service with its previous arguments. Dedicated data paths, ports, worker settings and reverse proxy configuration are site-specific. The web UI supports the root or a nested public mount; redirect the bare mount to its trailing slash, strip the prefix upstream and preserve the public Host header.
+
+**Administration → Media inbox → Link existing library** monitors an existing collection read-only. Keep the originals accessible. Streaming uses the source tracks and EPUBs. Offline audiobook downloads use temporary space for one generated EPUB. The copy-based inbox remains available in a separate folder. Audiobookshelf imports and Android/web sessions share one profile history with current and longest activity streaks.
 
 ## Install
 

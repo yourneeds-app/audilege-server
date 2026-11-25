@@ -26,11 +26,9 @@ function listeningDashboard(body,s) {
     col.append(el("small",numbers.format(Math.round(value/60))),bar,el("span",new Date(day).toLocaleDateString(uiLanguage,{weekday:"short",timeZone:"UTC"})));
     bars.append(col);
   }
-  let streak=0,last=days[today]?midnight:midnight-dayMs;
-  while(days[dayKey(last)]>0){streak++;last-=dayMs;}
   const sum=weekDays.reduce((a,k)=>a+(days[k]||0),0);
   const weekly=el("div",null,"weeklySummary");
-  weekly.append(statCard(tr("7 Tage gesamt"),duration(sum)),statCard(tr("Täglicher Ø"),duration(sum/7)),statCard(tr("Hörserie"),streak+" "+(streak===1?tr("Tag"):tr("Tage"))));
+  weekly.append(statCard(tr("7 Tage gesamt"),duration(sum)),statCard(tr("Täglicher Ø"),duration(sum/7)),statCard(tr("Aktuelle Serie"),s.streak.current+" "+tr(s.streak.current===1?"Tag":"Tage")),statCard(tr("Längste Serie"),s.streak.best+" "+tr(s.streak.best===1?"Tag":"Tage")));
   week.append(weekly);
   recent.append(el("h2",tr("Letzte Aktivitäten")));
   const list=el("div",null,"recentList");
