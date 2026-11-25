@@ -231,6 +231,15 @@ function openPodcastFolder(key=""){
   category="podcast";podcastFilter=key;allEpisodes=false;$("bookSearch").value="";renderShelf();
   $("shelfTitle").scrollIntoView({block:"start"});
 }
+function podcastShowCover(show){
+  const placeholder=()=>{const node=el("span","♫","art showCoverPlaceholder");node.setAttribute("aria-hidden","true");return node;};
+  if(!show.cover)return placeholder();
+  const img=el("img",null,"art");
+  img.alt="";img.loading="lazy";img.decoding="async";
+  img.onerror=()=>img.replaceWith(placeholder());
+  img.src="web/podcasts/"+show.id+"/cover";
+  return img;
+}
 function podcastOverview(shelf,term){
   const shows=subscriptions.filter(s=>(s.show+" "+s.creator).toLocaleLowerCase().includes(term));
   if(term&&!shows.length)return;
@@ -241,11 +250,7 @@ function podcastOverview(shelf,term){
   const grid=el("div",null,"grid");shelf.append(grid);
   for(const s of (home?shows.slice(0,3):shows)){
     const tile=el("button",null,"book podTile");
-    const episode=books.filter(b=>b.podcast?.key===s.key&&b.cover).sort((a,b)=>b.id-a.id)[0];
-    const fallback=()=>cover(episode||{title:s.show});
-    if(s.cover){
-      const img=el("img",null,"art");img.alt="";img.onerror=()=>img.replaceWith(fallback());img.src="web/podcasts/"+s.id+"/cover";tile.append(img);
-    }else tile.append(fallback());
+    tile.append(podcastShowCover(s));
     tile.append(el("strong",s.show));if(s.creator&&s.creator!==s.show)tile.append(el("small",s.creator));
     tile.onclick=()=>openPodcastFolder(s.key);grid.append(tile);
   }
@@ -275,7 +280,9 @@ function podcastShelf(shelf,items,term){
   if(podcastFilter){const clear=el("button",tr("Alle Podcasts"),"textButton");clear.onclick=()=>{podcastFilter="";allEpisodes=false;renderShelf();};shows.append(clear);}
   for(const g of [...groups.values()].sort((a,b)=>a.show.localeCompare(b.show,uiLanguage))){
     const b=el("button",null,"showRow");b.setAttribute("aria-pressed",String(podcastFilter===g.key));
-    b.append(el("strong",g.show),el("small",[g.creator,g.count+(g.count===1?tr(" Folge"):tr(" Folgen"))].filter(Boolean).join(" · ")));
+    const details=el("span",null,"showDetails");
+    details.append(el("strong",g.show),el("small",[g.creator!==g.show?g.creator:"",g.count+(g.count===1?tr(" Folge"):tr(" Folgen"))].filter(Boolean).join(" · ")));
+    b.append(podcastShowCover(g),details);
     b.onclick=()=>{podcastFilter=podcastFilter===g.key?"":g.key;allEpisodes=false;renderShelf();};shows.append(b);
   }
   if(account?.is_admin){const add=el("button",tr("Feed abonnieren"),"textButton");add.onclick=()=>{imports();$("type").value="rss";configure();$("feedUrl").focus();};shows.append(add);}

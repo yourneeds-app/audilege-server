@@ -2,6 +2,8 @@
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from hashlib import sha256
+from html.parser import HTMLParser
+import json
 from pathlib import Path
 import re
 import shutil
@@ -12,7 +14,7 @@ from threading import Event, Thread
 from time import time
 from http.client import HTTPException
 from urllib.error import URLError
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 from xml.etree import ElementTree as ET
 
@@ -21,6 +23,8 @@ from metadata import image_type
 
 KEEP = 5
 INTERVAL = 15 * 60
+ART_RETRY = 24 * 60 * 60
+ART_REFRESH = 7 * ART_RETRY
 
 TYPES={"audio/mpeg":".mp3","audio/mp3":".mp3","audio/mp4":".m4a","audio/x-m4a":".m4a","audio/ogg":".ogg","audio/flac":".flac","audio/wav":".wav"}
 AUDIO_EXT={".mp3",".m4b",".m4a",".ogg",".wav",".flac"}
@@ -82,11 +86,17 @@ def episodes(url):
             items[key]=dict(guid=key,title=(item.findtext("{*}title") or show)[:300],src=src,
                             ext=ext if ext in AUDIO_EXT else TYPES.get(mime,""),date=date,published=published,
                             image=artwork(item) or show_image,length=media.get("length"))
-    return show,creator,items,show_image
+    channel_id=channel.findtext("{http://www.youtube.com/xml/schemas/2015}channelId") or ""
+    channel_link=channel.findtext("{*}link") or ""
+    youtube=youtube_channel(channel_id,channel_link)
+    if not youtube:
+        youtube=next((video for item in channel.findall("{*}item")
+                      if (video:=youtube_video(item.findtext("{*}link") or ""))),"")
+    return show,creator,items,show_image,youtube
 
 
 def preview(lib,url):
-    show,creator,items,_=episodes(url)
+    show,creator,items,_,_=episodes(url)
     with lib.db() as db:
         seen={r[0] for r in db.execute("SELECT guid FROM podcast_items WHERE feed=?",(url,))}
         refresh_metadata(db,url,show,creator,items,seen)
@@ -112,7 +122,7 @@ def import_episode(lib,owner,url,guid):
         if row:return {"id":row[0],"existing":True}
         if db.execute("SELECT 1 FROM podcast_feeds WHERE url=?",(url,)).fetchone():
             raise ValueError("Bei einem Abonnement lädt Audilege automatisch die fünf neuesten Folgen.")
-    show,creator,items,_=episodes(url)
+    show,creator,items,_,_=episodes(url)
     if guid not in items:raise ValueError("Diese Folge ist im Feed nicht mehr verfügbar.")
     return download(lib,url,show,creator,items[guid])
 
@@ -124,6 +134,94 @@ def fetch_art(url):
             return image_type(image),image
         except (ValueError,OSError,HTTPException):pass
     return None
+
+
+def youtube_channel(channel_id,link):
+    if re.fullmatch(r"UC[A-Za-z0-9_-]{22}",channel_id):
+        return "https://www.youtube.com/channel/"+channel_id
+    try:parts=urlsplit(link)
+    except ValueError:return ""
+    if parts.hostname not in ("youtube.com","www.youtube.com","m.youtube.com"):
+        return ""
+    match=re.match(r"^(/(?:channel/UC[A-Za-z0-9_-]{22}|(?:user|c)/[^/]+|@[^/]+))(?:/|$)",parts.path)
+    return "https://www.youtube.com"+match[1] if match else ""
+
+
+def youtube_video(link):
+    try:parts=urlsplit(link)
+    except ValueError:return ""
+    if parts.hostname in ("youtube.com","www.youtube.com","m.youtube.com") and parts.path=="/watch":
+        video=parse_qs(parts.query).get("v",[""])[0]
+    elif parts.hostname=="youtu.be":
+        video=parts.path.strip("/")
+    else:return ""
+    return "https://www.youtube.com/watch?v="+video if re.fullmatch(r"[A-Za-z0-9_-]{11}",video) else ""
+
+
+class ArtworkRedirect(HTTPRedirectHandler):
+    def __init__(self,hosts):
+        self.hosts=hosts
+
+    def validate(self,url):
+        parsed=urlsplit(http_url(url))
+        if parsed.scheme!="https" or parsed.hostname not in self.hosts or parsed.port not in (None,443):
+            raise ValueError("Unbekannter Anbieter für Podcastbilder.")
+        return url
+
+    def redirect_request(self,req,fp,code,msg,headers,newurl):
+        return super().redirect_request(req,fp,code,msg,headers,self.validate(newurl))
+
+
+def public_artwork_request(url,hosts,limit):
+    redirect=ArtworkRedirect(hosts)
+    req=Request(redirect.validate(url),headers={"User-Agent":"Audilege-Server","Accept-Language":"de,en;q=0.9"})
+    with build_opener(redirect).open(req,timeout=6) as response:
+        return response.read(limit+1)
+
+
+class ChannelAvatar(HTMLParser):
+    image=""
+
+    def handle_starttag(self,tag,attrs):
+        if tag=="meta":
+            values=dict(attrs)
+            if values.get("property")=="og:image" and not self.image:
+                self.image=values.get("content") or ""
+
+
+def channel_artwork(show,creator,feed_url,youtube):
+    if youtube:
+        try:
+            if "/watch?" in youtube:
+                query=urlencode(dict(url=youtube,format="json"))
+                result=public_artwork_request("https://www.youtube.com/oembed?"+query,{"www.youtube.com"},64*1024)
+                youtube=youtube_channel("",json.loads(result).get("author_url",""))
+            html=public_artwork_request(youtube,{"www.youtube.com"},512*1024) if youtube else b""
+            parser=ChannelAvatar()
+            parser.feed(html.decode("utf-8","replace"))
+            if parser.image:
+                data=public_artwork_request(parser.image,{"yt3.ggpht.com","yt3.googleusercontent.com"},5*1024**2)
+                return parser.image,(image_type(data),data)
+        except (ValueError,OSError,HTTPException,AttributeError,TypeError):
+            pass
+    try:
+        query=urlencode(dict(term=show,country="de",media="podcast",entity="podcast",limit=12))
+        data=public_artwork_request("https://itunes.apple.com/search?"+query,{"itunes.apple.com"},512*1024)
+        rows=json.loads(data).get("results",[])
+        exact=[row for row in rows if row.get("feedUrl") and row["feedUrl"].rstrip("/")==feed_url.rstrip("/")]
+        def name(value):
+            return " ".join(str(value or "").casefold().split())
+        matches=exact or [row for row in rows if creator and name(row.get("collectionName"))==name(show)
+                          and name(row.get("artistName"))==name(creator)]
+        images={row.get("artworkUrl600") or row.get("artworkUrl100") for row in matches}-{None,""}
+        if len(images)==1:
+            source=images.pop()
+            hosts={f"is{i}-ssl.mzstatic.com" for i in range(1,6)}
+            image=public_artwork_request(source,hosts,5*1024**2)
+            return source,(image_type(image),image)
+    except (ValueError,OSError,HTTPException,AttributeError,TypeError):
+        pass
+    return "",None
 
 
 def download(lib,url,show,creator,ep,subscription=None,order=()):
@@ -201,7 +299,7 @@ class Subscriptions:
         self.stopped=Event()
 
     def subscribe(self,url,owner):
-        show,creator,_,_=episodes(url)
+        show,creator,_,_,_=episodes(url)
         with self.lib.db() as db:
             db.execute("""INSERT INTO podcast_feeds(url,title,creator,owner) VALUES(?,?,?,?)
                           ON CONFLICT(url) DO NOTHING""",(url,show,creator,owner))
@@ -210,17 +308,27 @@ class Subscriptions:
 
     def sync(self,feed):
         url=feed["url"]
-        show,creator,items,show_image=episodes(url)
+        show,creator,items,show_image,youtube=episodes(url)
+        youtube_hint="video" if "/watch?" in youtube else youtube
+        art_hint=sha256(json.dumps([show_image,youtube_hint,show,creator]).encode()).hexdigest()
+        checked=int(time())
         with self.lib.db() as db:
-            cached=db.execute("SELECT source FROM podcast_art WHERE feed=?",(feed["id"],)).fetchone()
-        art=fetch_art(show_image) if show_image and (not cached or cached[0]!=show_image) else None
+            art_state=db.execute("SELECT art_checked,art_hint FROM podcast_feeds WHERE id=?",(feed["id"],)).fetchone()
+        if art_state is None:return
+        refresh_art=art_state["art_hint"]!=art_hint or checked>=art_state["art_checked"]
+        source,art=show_image,None
+        if refresh_art:
+            art=fetch_art(show_image)
+            if not art:
+                source,art=channel_artwork(show,creator,url,youtube)
         with self.lib.db() as db:
             db.execute("BEGIN IMMEDIATE")
             if not db.execute("SELECT 1 FROM podcast_feeds WHERE id=?",(feed["id"],)).fetchone():return
-            if art:
-                db.execute("INSERT OR REPLACE INTO podcast_art VALUES(?,?,?,?)",(feed["id"],show_image,*art))
-            elif not show_image:
-                db.execute("DELETE FROM podcast_art WHERE feed=?",(feed["id"],))
+            if refresh_art:
+                db.execute("UPDATE podcast_feeds SET art_checked=?,art_hint=? WHERE id=?",
+                           (checked+(ART_REFRESH if art else ART_RETRY),art_hint,feed["id"]))
+                if art:
+                    db.execute("INSERT OR REPLACE INTO podcast_art VALUES(?,?,?,?)",(feed["id"],source,*art))
             stored=dict(db.execute("SELECT guid,published FROM podcast_items WHERE feed=? ORDER BY book DESC",(url,)))
             refresh_metadata(db,url,show,creator,items,stored)
             db.execute("UPDATE podcast_feeds SET title=?,creator=? WHERE id=?",(show,creator,feed["id"]))

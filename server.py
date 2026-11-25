@@ -592,9 +592,7 @@ class Handler(BaseHTTPRequestHandler):
             if podcast_art and method=="GET":
                 art=db.execute("SELECT mime,image FROM podcast_art WHERE feed=?",(int(podcast_art[1]),)).fetchone()
                 if not art:raise KeyError("Kein Sendungscover vorhanden.")
-                self.respond(200,art["mime"],len(art["image"]))
-                if self.command!="HEAD":self.wfile.write(art["image"])
-                return
+                return self.artwork(art["image"],art["mime"],False)
             retry=re.fullmatch(r"/web/jobs/(\d+)/retry",path)
             if retry and method=="POST":
                 self.body()

@@ -1,7 +1,7 @@
 ## Deutsch
 
-Bibliothekskacheln zeigen nur Autorennamen. Sprecherangaben bleiben in den Buchdetails und im Hörplayer.
+Audilege zeigt Kanalbilder in der Podcastliste. Der Server übernimmt sie aus RSS, vom zugehörigen YouTube-Kanal oder aus eindeutig passenden Apple-Podcasts-Einträgen.
 
 ## English
 
-Library tiles show author names only. Narrator credits remain in book details and the audio player.
+Audilege shows channel artwork in the podcast list. The server retrieves it from RSS, the associated YouTube channel, or an exact Apple Podcasts match.

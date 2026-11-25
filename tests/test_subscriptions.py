@@ -1,5 +1,6 @@
 """Use fictional RSS feeds to exercise real imports, cleanup and restart on disk."""
 import io
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -8,7 +9,7 @@ import wave
 
 import test_server
 from library import Library
-from podcasts import Subscriptions, cleanup, import_episode, newest, preview
+from podcasts import Subscriptions, channel_artwork, cleanup, import_episode, newest, preview
 from server import catalog, podcast_subscriptions, revision, stats
 
 
@@ -39,6 +40,9 @@ class SubscriptionTest(unittest.TestCase):
         mocked=patch("podcasts.fetch",side_effect=self.fetch)
         mocked.start()
         self.addCleanup(mocked.stop)
+        public=patch("podcasts.public_artwork_request",side_effect=OSError)
+        public.start()
+        self.addCleanup(public.stop)
 
     def fetch(self,url):
         if url in self.feeds:
@@ -114,6 +118,45 @@ class SubscriptionTest(unittest.TestCase):
         entries={k:{"published":v} for k,v in [("third",5),("first",8),("equal",8),("undated",None)]}
         self.assertEqual(newest(entries,[("missing",7),("older-undated",None)]),
                          ["first","equal","missing","third","undated","older-undated"])
+
+    def test_youtube_logo_is_cached_and_retained_after_provider_failure(self):
+        url="https://a.example/rss"
+        video="https://www.youtube.com/watch?v=abc123DEF45"
+        image="https://yt3.ggpht.com/fixture"
+        png=b"\x89PNG\r\n\x1a\nfixture"
+        rss=f'<rss><channel><title>Testsendung</title><item><link>{video}</link></item></channel></rss>'
+        def public(source,hosts,limit):
+            if "/oembed?" in source:return json.dumps({"author_url":"https://youtube.com/@fixture"}).encode()
+            if source=="https://www.youtube.com/@fixture":
+                return f'<meta content="{image}" property="og:image">'.encode()
+            self.assertEqual(source,image)
+            return png
+        with patch("podcasts.fetch",side_effect=lambda _url:Response(rss.encode(),url)), \
+             patch("podcasts.public_artwork_request",side_effect=public) as request:
+            self.worker.subscribe(url,1)
+            self.sync(url)
+            self.sync(url)
+            self.assertEqual(request.call_count,3)
+            with self.lib.db() as db:
+                self.assertTrue(podcast_subscriptions(db)[0]["cover"])
+                db.execute("UPDATE podcast_feeds SET art_checked=0")
+            request.side_effect=OSError()
+            self.sync(url)
+        with self.lib.db() as db:
+            self.assertEqual(tuple(db.execute("SELECT source,mime,image FROM podcast_art").fetchone()),(image,"image/png",png))
+
+    def test_public_catalog_requires_exact_feed_or_matching_show_and_creator(self):
+        image="https://is1-ssl.mzstatic.com/fixture.jpg"
+        rows={"results":[{"feedUrl":"https://feeds.example/rss","collectionName":"Testsendung",
+                         "artistName":"Testredaktion","artworkUrl600":image}]}
+        data=json.dumps(rows).encode()
+        with patch("podcasts.public_artwork_request",return_value=data) as request:
+            self.assertEqual(channel_artwork("Testsendung","Andere Redaktion","https://other.example/rss",""),("",None))
+            self.assertEqual(request.call_count,1)
+        for title,author,feed in [("Testsendung","Testredaktion","https://local.example/rss"),
+                                  ("Anderer Titel","Andere Redaktion","https://feeds.example/rss")]:
+            with patch("podcasts.public_artwork_request",side_effect=[data,b"\xff\xd8\xfffixture"]):
+                self.assertEqual(channel_artwork(title,author,feed,""),(image,("image/jpeg",b"\xff\xd8\xfffixture")))
 
     def test_shelf_lists_only_subscriptions_including_empty_feeds(self):
         a,b=self.feeds

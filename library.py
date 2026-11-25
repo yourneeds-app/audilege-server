@@ -240,6 +240,11 @@ class Library:
                 db.execute("ALTER TABLE podcast_items ADD COLUMN published INTEGER")
             if "creator" not in [r[1] for r in db.execute("PRAGMA table_info(podcast_items)")]:
                 db.execute("ALTER TABLE podcast_items ADD COLUMN creator TEXT")
+            feed_columns={row[1] for row in db.execute("PRAGMA table_info(podcast_feeds)")}
+            if "art_checked" not in feed_columns:
+                db.execute("ALTER TABLE podcast_feeds ADD COLUMN art_checked INTEGER NOT NULL DEFAULT 0")
+            if "art_hint" not in feed_columns:
+                db.execute("ALTER TABLE podcast_feeds ADD COLUMN art_hint TEXT NOT NULL DEFAULT ''")
             if "archived_title" not in [r[1] for r in db.execute("PRAGMA table_info(sessions)")]:
                 db.execute("ALTER TABLE sessions ADD COLUMN archived_title TEXT")
             if "is_admin" not in [r[1] for r in db.execute("PRAGMA table_info(users)")]:
