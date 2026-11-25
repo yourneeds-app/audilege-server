@@ -62,7 +62,7 @@ function compareBooks(a,b){
   const order=$("shelfSort").value,title=byName.compare(a.title,b.title);
   if(order==="az"||order==="za")return order==="az"?title:-title;
   if(order==="author"||order==="authorDesc")
-    return compareOptional(a.authors[0]?.name,b.authors[0]?.name,order==="author"?1:-1)||title;
+    return compareOptional(creditedAuthors(a)[0],creditedAuthors(b)[0],order==="author"?1:-1)||title;
   if(order==="series"||order==="seriesDesc"){
     const left=String(a.metadata?.series||"").trim(),right=String(b.metadata?.series||"").trim();
     return compareOptional(left,right,order==="series"?1:-1)

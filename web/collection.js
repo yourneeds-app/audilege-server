@@ -15,10 +15,34 @@ function catalogPage(name,value=""){
 function facetLink(field,value,label=value){
   return action(label,()=>catalogPage(field,value),"facetLink");
 }
+const creditRole=/\s*\((Autor(?:in)?|Author|Sprecher(?:in)?|Narrator|Erzähler(?:in)?|Übersetzer(?:in)?|Translator)\)\s*$/i;
+const authorRole=/^(Autor(?:in)?|Author)$/i;
+const narratorRole=/^(Sprecher(?:in)?|Narrator|Erzähler(?:in)?)$/i;
+function creditParts(name){
+  return name.split(/(?<=\))\s*[,;]\s*/);
+}
+
+function creditedAuthors(book){
+  return [...new Set(book.authors.flatMap(({name})=>{
+    const parts=creditParts(name);
+    if(!parts.some(part=>creditRole.test(part)))return [name.trim()];
+    return parts.flatMap(part=>{
+      const role=part.match(creditRole);
+      return !role||authorRole.test(role[1])?[part.replace(creditRole,"").trim()]:[];
+    });
+  }).filter(Boolean))];
+}
+function creditedNarrator(book){
+  const direct=book.metadata?.narrator?.trim();
+  if(direct)return direct;
+  return book.authors.flatMap(({name})=>creditParts(name)
+    .filter(part=>narratorRole.test(part.match(creditRole)?.[1]||""))
+    .map(part=>part.replace(creditRole,"").trim())).filter(Boolean).join(", ");
+}
 function appendAuthorLinks(container,book){
-  book.authors.forEach((author,index)=>{
+  creditedAuthors(book).forEach((author,index)=>{
     if(index)container.append(document.createTextNode(", "));
-    container.append(facetLink("authors",author.name));
+    container.append(facetLink("authors",author));
   });
 }
 function renderDetailFacets(book){
@@ -27,7 +51,7 @@ function renderDetailFacets(book){
   const series=book.metadata?.series;
   $("detailSeries").replaceChildren(...(series?[facetLink("series",series)]:[]));
   $("detailSeries").hidden=!series;
-  const narrator=book.metadata?.narrator;
+  const narrator=creditedNarrator(book);
   $("detailNarrator").replaceChildren(...(narrator?[facetLink("narrator",narrator,tr("Gelesen von")+" "+narrator)]:[]));
   $("detailNarrator").hidden=!narrator;
 }
@@ -40,7 +64,8 @@ function sectionHead(box,title,more){
   if(more)header.append(action(tr("Alle anzeigen"),more,"textButton"));box.append(header);
 }
 function values(b,field){
-  if(field==="authors")return b.authors.map(a=>a.name);
+  if(field==="authors")return creditedAuthors(b);
+  if(field==="narrator")return creditedNarrator(b).split(";").map(name=>name.trim()).filter(Boolean);
   return String(b.metadata?.[field]||"").split(field==="tags"?/[,;|]/:/[;]/).map(x=>x.trim()).filter(Boolean);
 }
 function fold(s){return String(s??"").normalize("NFKD").toLocaleLowerCase().replace(/[\u0300-\u036f]/g,"").replace(/ø/g,"o").replace(/ß/g,"ss");}
@@ -66,7 +91,7 @@ function groupsInto(box,field,groups,limit=Infinity){
 function globalResults(box,term){
   const tokens=fold(term).trim().split(/\s+/),matches=(...parts)=>tokens.every(t=>fold(parts.join(" ")).includes(t));
   let count=0;
-  const titles=books.filter(matchesShelfStatus).filter(b=>matches(b.title,...b.authors.map(a=>a.name),b.metadata?.narrator,b.metadata?.series,b.metadata?.tags,b.metadata?.isbn,b.podcast?.show,b.podcast?.creator)).sort(compareBooks);
+  const titles=books.filter(matchesShelfStatus).filter(b=>matches(b.title,...creditedAuthors(b),creditedNarrator(b),b.metadata?.series,b.metadata?.tags,b.metadata?.isbn,b.podcast?.show,b.podcast?.creator)).sort(compareBooks);
   for(const [heading,items] of [[tr("Titel"),titles.filter(b=>b.category!=="podcast")],[tr("Podcastfolgen"),titles.filter(b=>b.category==="podcast")]]){
     if(!items.length)continue;count+=items.length;sectionHead(box,heading);const grid=el("div",null,"grid");box.append(grid);appendBookPage(grid,groupEditions(items));
   }
@@ -88,7 +113,7 @@ function renderStart(box){
     const info=el("span",null,"homeInfo"),percent=Math.round(book.readingProgress)+" %";
     if(hero){
       const [eyeline,cta]=labels[mode]||[tr("Zuletzt geöffnet"),tr("Fortsetzen")];
-      info.append(el("small",eyeline),el("strong",book.title),el("span",book.authors.map(a=>a.name).join(", ")));
+      info.append(el("small",eyeline),el("strong",book.title),el("span",creditedAuthors(book).join(", ")));
       const progress=el("progress");progress.max=100;progress.value=book.readingProgress;progress.setAttribute("aria-label",tr("Fortschritt"));
       const chapter=book.resumeChapter>0?tr("Kapitel {n}").replace("{n}",book.resumeChapter):"";
       info.append(progress,el("small",[chapter,percent].filter(Boolean).join(" · ")),el("span",cta,"homeCTA"));

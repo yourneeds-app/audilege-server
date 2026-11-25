@@ -18,7 +18,7 @@ function renderResume(visible) {
   const book=visible && (recent||titles.reduce((last,b)=>!last||b.files[0].id>last.files[0].id?b:last,null));
   box.hidden=!book;if(!book)return;
   const btn=el("button",null,"resumeCard"), info=el("span",null,"resumeText");
-  info.append(el("small",recent?tr("Fortsetzen"):tr("Zuletzt hinzugefügt")),el("strong",book.title),el("span",book.authors.map(a=>a.name).join(", ")));
+  info.append(el("small",recent?tr("Fortsetzen"):tr("Zuletzt hinzugefügt")),el("strong",book.title),el("span",creditedAuthors(book).join(", ")));
   const progress=el("progress");progress.max=100;progress.value=book.readingProgress;progress.setAttribute("aria-label",tr("Fortschritt"));
   if(recent)info.append(progress);btn.append(cover(book),info,el("span","→","resumeArrow"));
   btn.onclick=()=>openReader(book,!!recent).catch(hint);box.append(btn);

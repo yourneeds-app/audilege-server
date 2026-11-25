@@ -134,8 +134,6 @@ function bookTile(book){
   button.append(artwork,el("strong",book.title));
   tile.append(button);
   appendAuthorLinks(tile,book);
-  const narrator=book.metadata?.narrator;
-  if(narrator)tile.append(facetLink("narrator",narrator,tr("Gelesen von")+" "+narrator));
   if($("showSeries").checked&&book.metadata?.series){
     const volume=String(book.metadata.volume??"").trim();
     const label=[book.metadata.series,volume&&tr("Band")+" "+volume].filter(Boolean).join(" · ");

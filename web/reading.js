@@ -17,7 +17,8 @@ function configureBook(book=detailBook){
   $("detailArt").replaceChildren(cover(book,book.category==="audilege"?"book":""));
   $("listenArt").replaceChildren(cover(book,"audio"));showBookInfo();
   $("audioTitle").textContent=book.title;
-  $("audioCredit").textContent=book.metadata?.narrator?tr("Gelesen von")+" "+book.metadata.narrator:book.authors.map(a=>a.name).join(", ");
+  const narrator=creditedNarrator(book);
+  $("audioCredit").textContent=narrator?tr("Gelesen von")+" "+narrator:creditedAuthors(book).join(", ");
   $("audioKind").textContent=book.category==="podcast"?"Podcast":tr("Hörbuch");
 }
 async function changeMode(mode) {
