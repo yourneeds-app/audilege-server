@@ -175,14 +175,18 @@ class Inbox:
                     for kind,base,files in groups(root):
                         yield root,reference,kind,base,files
             with self.lib.db() as db:
-                indexed=dict(db.execute("SELECT source,signature FROM scanned_media"))
+                indexed={r[0]:(r[1],r[2]) for r in db.execute("SELECT source,signature,display_source FROM scanned_media")}
+            display_updates=[]
             for root,reference,kind,base,files in sources():
                 key=os.path.normcase(str(base));rel=str(base.relative_to(root))
                 try:
                     multidisc=kind=="audio" and any(p.parent!=base for p in files) and base.is_dir()
                     relative=base if multidisc else None
                     sig=fingerprint(files,relative);observed[key]=sig
-                    if indexed.get(key)==sig:continue
+                    previous=indexed.get(key)
+                    if previous and previous[0]==sig:
+                        if previous[1]!=str(base):display_updates.append((str(base),key))
+                        continue
                     if not manual and self.failed.get(key,(None,))[0]==sig:
                         errors.append(self.failed[key][1]);continue
                     if self.seen.get(key)!=sig or any(time()-p.stat().st_mtime<5 for p in files):
@@ -193,12 +197,17 @@ class Inbox:
                     title=base.name if base.is_dir() and (multidisc or len(files)>1) else ""
                     tracks=[(p,p.relative_to(base).as_posix() if multidisc else p.name) for p in files]
                     self.lib.import_tracks(tracks,{"category":kind,"title":title},scan=(key,sig),verify=verify,link_root=reference)
+                    display_updates.append((str(base),key))
                     self.failed.pop(key,None);count+=1
                 except (FileNotFoundError,InterruptedError):
                     waiting+=1
                 except Exception as exc:
                     detail=rel+" · "+str(exc)[:200]
                     self.failed[key]=(observed.get(key),detail);errors.append(detail)
+            if display_updates:
+                with self.lib.db() as db:
+                    db.executemany("UPDATE scanned_media SET display_source=? WHERE source=?",display_updates)
+                    db.execute("INSERT OR REPLACE INTO server_settings VALUES('catalog_revision',lower(hex(randomblob(16))))")
         except OSError as exc:
             errors.append(str(exc)[:240])
         finally:

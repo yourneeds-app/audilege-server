@@ -23,7 +23,7 @@ class UpdateTests(unittest.TestCase):
     def test_rescan_groups_numbered_discs_and_moves_each_profiles_position(self):
         with TemporaryDirectory() as tmp, patch("media_tools.shutil.which",return_value=None):
             root=Path(tmp)
-            title=root/"Author"/"Vol 07 - Example"
+            title=root/"Author"/"Example Series"/"Vol 07 - Example"
             inbox=Inbox(self.lib)
             inbox.change_linked(str(root))
             for disc in (10,2,1):
@@ -48,6 +48,11 @@ class UpdateTests(unittest.TestCase):
             for _ in range(3):inbox.scan()
             self.assertEqual(inbox.status()["errors"],[])
             self.assertEqual(inbox.status()["imported"],0)
+            self.http.inbox=inbox
+            item=self.call("/web/library")["books"][0]
+            self.assertEqual(item["metadata"]["series"],"Example Series")
+            self.assertEqual(item["metadata"]["volume"],"7")
+            self.assertEqual(item["storage"]["path"],title.relative_to(root).as_posix())
             with self.lib.db() as db:
                 rows=db.execute("SELECT * FROM books WHERE merged_into IS NULL").fetchall()
                 self.assertEqual([r["title"] for r in rows],[title.name])
@@ -92,6 +97,12 @@ class UpdateTests(unittest.TestCase):
             with self.lib.db() as db:
                 items={r["category"]:dict(r) for r in db.execute("SELECT b.*,e.folder FROM books b JOIN editions e ON e.id=b.edition")}
             self.assertEqual(set(items),{"audilege","audio"})
+            self.http.inbox=inbox
+            result=self.call("/web/library")
+            locations={b["category"]:b["storage"] for b in result["books"]}
+            self.assertEqual(locations["audio"]["kind"],"collection")
+            self.assertEqual(locations["audio"]["path"].casefold(),"album")
+            self.assertEqual(locations["audilege"]["path"].casefold(),"fiction.epub")
             row=items["audio"]
             folder=self.lib.data/"editions"/row["folder"]
             self.assertLess(sum(p.stat().st_size for p in folder.iterdir()),tracks[0].stat().st_size)
@@ -117,7 +128,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn('method="post" action="web/login"',html)
         self.assertNotRegex(html,r'(src|href)="/')
         self.assertEqual(html.count("<script"),1)
-        bundle=self.call("/audilege-ui.js?v=0.4.4",raw=True)[2]
+        bundle=self.call("/audilege-ui.js?v=0.4.5",raw=True)[2]
         self.assertLess(bundle.index(b"function tr("),bundle.index(b"const categories ="))
         credentials={"username":"eins","password":"test-fixture-1","cookiePath":"/medien/audilege/"}
         origin={"Origin":"https://school.example","Host":"school.example"}

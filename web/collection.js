@@ -57,13 +57,14 @@ function globalResults(box,term){
 function renderCollection(){
   const term=$("bookSearch").value.trim(),box=$("books");
   const sortKey="audilege-sort:"+[shelfPage,category,podcastFilter,facetValue,Boolean(term),discovering].join("/");
-  if($("shelfSort").dataset.key!==sortKey){$("shelfSort").dataset.key=sortKey;$("shelfSort").value=localStorage.getItem(sortKey)||localStorage.getItem("audilege-sort")||"new";}
+  if($("shelfSort").dataset.key!==sortKey){$("shelfSort").dataset.key=sortKey;$("shelfSort").value=localStorage.getItem(sortKey)||(shelfPage==="series"&&facetValue?"series":localStorage.getItem("audilege-sort"))||"new";}
   $("shelfSort").onchange=()=>{localStorage.setItem(sortKey,$("shelfSort").value);renderShelf();};
   const custom=term||shelfPage==="start"||shelfPage in facets||discovering;
   $("startNav").setAttribute("aria-current",shelfPage==="start"&&!term?"page":"false");
   for(const key of Object.keys(facets))$(key+"Nav").setAttribute("aria-current",shelfPage===key&&!term?"page":"false");
   $("libraryNav").setAttribute("aria-current",!custom?"page":"false");
   $("shelfSort").hidden=!term&&(shelfPage==="start"||shelfPage in facets&&!facetValue);
+  $("showSeries").parentElement.hidden=!term&&(category==="podcast"||shelfPage in facets&&!facetValue);
   if(!custom)return false;
   $("resume").replaceChildren();$("resume").hidden=true;$("categories").replaceChildren();box.replaceChildren();
   renderSidebarCategories(Object.keys(categories).filter(k=>books.some(b=>b.category===k)||(k==="podcast"&&subscriptions.length)));
@@ -73,7 +74,7 @@ function renderCollection(){
     const groups=collect(shelfPage);$("shelfTitle").textContent=facetValue||facets[shelfPage];
     if(facetValue){
       const items=[...(groups.get(facetValue)||[])];
-      items.sort((a,b)=>shelfPage==="series"&&$("shelfSort").value==="new"?(Number(a.metadata.volume||Infinity)-Number(b.metadata.volume||Infinity)||compareBooks(a,b)):compareBooks(a,b));
+      items.sort(compareBooks);
       const grid=el("div",null,"grid");box.append(grid);appendBookPage(grid,items);
       if(shelfPage==="series")for(const link of libraryLinks.filter(x=>x.kind==="gap"&&items.some(b=>b.id===x.book)))box.append(el("p",tr("Fehlender Band: ")+link.target));
     }else groupsInto(box,shelfPage,groups);
@@ -105,6 +106,10 @@ function renderCollection(){
   if(!box.children.length)box.append(el("p",tr("Deine Bibliothek ist leer.")));return true;
 }
 
+$("showSeries").checked=localStorage.getItem("audilege-show-series")==="true";
+$("showSeries").onchange=()=>{
+  localStorage.setItem("audilege-show-series",String($("showSeries").checked));renderShelf();
+};
 const globalTools=el("div",null,"globalTools");globalTools.id="globalTools";
 const search=$("bookSearch");globalTools.append(search);document.querySelector("main.page").prepend(globalTools);
 const navIcons={startNav:[tr("Start"),"⌂"],seriesNav:[tr("Reihen"),"▤"],tagsNav:[tr("Genres"),"◇"],authorsNav:[tr("Autoren"),"♙"],settingsNav:[tr("Einstellungen"),"⚙"],profileNav:[tr("Server & Profil"),"▣"],versionNav:[tr("Info & Updates"),"ⓘ"]};

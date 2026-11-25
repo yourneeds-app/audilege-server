@@ -7,6 +7,10 @@ const strings=Object.fromEntries((
 ).split("\n").map(x=>x.split("|")));
 Object.assign(strings,{"Dieses Gerät":"This device","Gerätestand übernehmen? Abbrechen übernimmt den Serverstand.":"Use the device position? Cancel uses the server position.","Der Stand wurde erneut geändert.":"The position has changed again.","Serverstand übernommen. Öffne den Titel erneut.":"Server position selected. Reopen the title to resume.","Täglich nach Updates suchen":"Check for updates daily","Gerätesitzungen":"Device sessions","Sitzung beenden":"End session","Gespielt":"Played","Dieses Gerät wird abgemeldet.":"This device will be signed out.","Seite":"Page","von":"of","Gelesen von":"Narrated by","Steuerung":"Controls","Installierte Version":"Installed version","Wiedergabegerät":"Playback device"});
 Object.assign(strings,{
+  "Reihe A–Z":"Series A–Z", "Reihe Z–A":"Series Z–A", "Band":"Volume",
+  "Speicherort A–Z":"Storage location A–Z", "Speicherort Z–A":"Storage location Z–A",
+  "Reihe anzeigen":"Show series", "Sammlung":"Collection", "Quellordner":"Source folder",
+  "Serverbibliothek":"Server library",
   "In Warteschlange": "Queued",
   "Abgleich wird gestartet": "Starting alignment",
   "Dateien prüfen …": "Checking files …",

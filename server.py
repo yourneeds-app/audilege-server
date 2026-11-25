@@ -34,7 +34,35 @@ from activity import merged
 import maintenance
 
 
-def catalog(db,owner,book_id=None,start=False):
+def shelf_location(source, roots):
+    if source:
+        path = Path(source)
+        for kind, root in roots:
+            if root and path.is_relative_to(root):
+                return {"kind": kind, "path": path.relative_to(root).as_posix()}
+        return {"kind": "source", "path": path.name}
+    return {"kind": "library", "path": ""}
+
+
+def folder_series(location, metadata):
+    if location["kind"] not in ("collection", "inbox"):
+        return
+    parts = location["path"].split("/")
+    if parts[0].casefold() in ("audiobooks", "ebooks", "readaloud", "podcasts"):
+        parts = parts[1:]
+    for i in range(2, len(parts)):
+        match = re.match(r"^(?:vol(?:ume)?|band)\.?\s*(\d+(?:[.,]\d+)?)\s*(?:[-–—]|$)", parts[i], re.I)
+        if match:
+            series = parts[i-1]
+            if not metadata.get("series"):
+                metadata["series"] = series
+            if str(metadata["series"]).casefold() == series.casefold() and metadata.get("volume") in (None, ""):
+                whole, _, decimal = match[1].replace(",", ".").partition(".")
+                metadata["volume"] = str(int(whole)) + ("." + decimal if decimal else "")
+            return
+
+
+def catalog(db,owner,book_id=None,start=False,storage_roots=None):
     out = []
     where="";args=[owner,owner,book_id,book_id]
     if start:
@@ -44,7 +72,13 @@ def catalog(db,owner,book_id=None,start=False):
             WHERE b.merged_into IS NULL AND p.owner=? AND json_extract(p.data,'$.percentage')<100
             ORDER BY json_extract(p.data,'$.updatedAt') DESC LIMIT 3))"""
         args.append(owner)
-    for b in db.execute("""SELECT b.*,e.cover,p.data,pi.feed,pi.show_title,pi.published,coalesce(nullif(pf.creator,''),pi.creator) AS creator,
+    storage_column = ""
+    if storage_roots is not None:
+        storage_column = """(SELECT x.path FROM readalong_exports x WHERE x.edition=b.edition) AS export_path,
+            (SELECT coalesce(s.display_source,s.source) FROM scanned_media s WHERE s.book=b.id
+             AND NOT EXISTS (SELECT 1 FROM readalong_exports x WHERE x.edition=b.edition AND lower(x.path)=lower(s.source))
+             ORDER BY s.source LIMIT 1) AS storage_source,"""
+    for b in db.execute("SELECT "+storage_column+""" b.*,e.cover,p.data,pi.feed,pi.show_title,pi.published,coalesce(nullif(pf.creator,''),pi.creator) AS creator,
         EXISTS(SELECT 1 FROM player_items i WHERE i.book=b.id AND i.owner=? AND i.kind='played') AS played,
         (EXISTS(SELECT 1 FROM book_covers c WHERE c.book=b.id) OR EXISTS(SELECT 1 FROM role_covers c WHERE c.book=b.id)) AS custom_cover FROM books b JOIN editions e ON e.id=b.edition
         LEFT JOIN podcast_items pi ON pi.book=b.id LEFT JOIN podcast_feeds pf ON pf.url=pi.feed
@@ -58,6 +92,11 @@ def catalog(db,owner,book_id=None,start=False):
             "readStatus":"finished" if pct>=100 else "reading" if pct else "unread",
             "addedAt":b["added_at"],"updatedAt":prog.get("updatedAt") or "", "cover":bool(b["cover"] or b["custom_cover"]),
             "files":[{"id":b["edition"],"role":"primary","format":"epub","filename":"book.epub","mediaOverlay":{"available":narrated}}]})
+        if storage_roots is not None:
+            origin = shelf_location(b["storage_source"], storage_roots)
+            out[-1]["storage"] = shelf_location(b["export_path"], storage_roots) if b["export_path"] else origin
+            if b["category"] != "podcast":
+                folder_series(origin, out[-1]["metadata"])
         if b["feed"]:
             out[-1]["podcast"]={"show":b["show_title"],"creator":b["creator"],"published":b["published"],
                                 "key":hashlib.sha256(b["feed"].encode()).hexdigest()}
@@ -436,7 +475,9 @@ class Handler(BaseHTTPRequestHandler):
                 db.execute("BEGIN")
                 jobs=[dict(r) for r in db.execute("SELECT j.id,j.book,b.title,j.state,j.note FROM jobs j JOIN books b ON j.book=b.id WHERE owner=? ORDER BY j.id DESC LIMIT 12",(owner,))]
                 account=db.execute("SELECT name,is_admin FROM users WHERE id=?",(owner,)).fetchone()
-                return self.output({"books":catalog(db,owner,start=param("view")=="start"),"subscriptions":podcast_subscriptions(db),"jobs":jobs,"account":dict(account),"sources":SOURCES,"revision":revision(db),"version":maintenance.VERSION,
+                inbox = getattr(self.server, "inbox", None)
+                roots = (("collection", inbox.linked), ("inbox", inbox.root)) if inbox else ()
+                return self.output({"books":catalog(db,owner,start=param("view")=="start",storage_roots=roots),"subscriptions":podcast_subscriptions(db),"jobs":jobs,"account":dict(account),"sources":SOURCES,"revision":revision(db),"version":maintenance.VERSION,
                     "links":[dict(r) for r in db.execute("SELECT * FROM library_links")]})
             if path=="/web/uploads" and method=="POST":
                 name=str(param("name",""))[:200]

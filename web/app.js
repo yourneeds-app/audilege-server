@@ -96,6 +96,14 @@ function renderShelf(){
 function bookTile(book){
   const button=el("button",null,"book");
   button.append(cover(book),el("strong",book.title),el("small",book.authors.map(a=>a.name).join(", ")));
+  if($("showSeries").checked&&book.metadata?.series){
+    const volume=String(book.metadata.volume??"").trim();
+    button.append(el("small",[book.metadata.series,volume&&tr("Band")+" "+volume].filter(Boolean).join(" · ")));
+  }
+  if(!$("shelfSort").hidden&&["location","locationDesc"].includes($("shelfSort").value)){
+    const location=el("small",storageLabel(book),"shelfLocation");
+    location.title=location.textContent;button.append(location);
+  }
   if(book.played)button.append(el("small",tr("Gespielt")));
   if(book.readingProgress>0)button.append(el("small",Math.round(book.readingProgress)+" %"));
   button.onclick=()=>openReader(book).catch(hint);return button;

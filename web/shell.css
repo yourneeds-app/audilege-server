@@ -60,3 +60,7 @@
  .activitySplit{grid-template-columns:1fr}.shelfTools .filters{flex:1 1 100%}.statCards{gap:.4rem}.statCard span{font-size:.76rem}
  .playerArt.coverStage{width:min(88%,18rem)}#detailArt img.art{max-height:17rem}
 }
+.shelfTools .seriesSwitch {display:inline-flex;align-items:center;gap:.45rem;white-space:nowrap;min-height:2.6rem;cursor:pointer}
+.shelfTools .seriesSwitch input {width:1rem;height:1rem;margin:0;accent-color:var(--accent)}
+.shelfTools .seriesSwitch[hidden] {display:none}
+.book .shelfLocation {overflow-wrap:anywhere}

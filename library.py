@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS podcast_building(folder TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS book_covers(book INTEGER PRIMARY KEY,mime TEXT NOT NULL,image BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS server_settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS scanned_media(source TEXT PRIMARY KEY,signature TEXT NOT NULL,book INTEGER NOT NULL,source_tags TEXT NOT NULL DEFAULT '{}');
+CREATE INDEX IF NOT EXISTS scanned_media_book_source ON scanned_media(book,source);
 CREATE TABLE IF NOT EXISTS books(id INTEGER PRIMARY KEY,title TEXT NOT NULL,author TEXT NOT NULL,category TEXT NOT NULL,edition INTEGER);
 CREATE TABLE IF NOT EXISTS editions(id INTEGER PRIMARY KEY,book INTEGER NOT NULL,folder TEXT NOT NULL UNIQUE,cover TEXT);
 CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY,book INTEGER NOT NULL,owner INTEGER NOT NULL,folder TEXT NOT NULL,language TEXT NOT NULL,state TEXT NOT NULL,note TEXT NOT NULL);
@@ -229,6 +230,8 @@ class Library:
                 db.execute("ALTER TABLE books ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'")
             if "source_tags" not in [r[1] for r in db.execute("PRAGMA table_info(scanned_media)")]:
                 db.execute("ALTER TABLE scanned_media ADD COLUMN source_tags TEXT NOT NULL DEFAULT '{}'")
+            if "display_source" not in [r[1] for r in db.execute("PRAGMA table_info(scanned_media)")]:
+                db.execute("ALTER TABLE scanned_media ADD COLUMN display_source TEXT")
             for table, field in (("books","merged_into"), ("jobs","companion"), ("jobs","source_edition"), ("jobs","companion_edition")):
                 if field not in [r[1] for r in db.execute(f"PRAGMA table_info({table})")]:
                     db.execute(f"ALTER TABLE {table} ADD COLUMN {field} INTEGER")

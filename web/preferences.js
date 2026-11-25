@@ -33,10 +33,34 @@ $("settingsNav").onclick=async()=>{await closeReader();show("settingsView");};
 $("shelfSort").value=localStorage.getItem("audilege-sort")||"new";
 $("shelfSort").onchange=()=>{localStorage.setItem("audilege-sort",$("shelfSort").value);renderShelf();};
 const byName=new Intl.Collator(uiLanguage,{numeric:true,sensitivity:"base"});
+function storageLabel(book){
+  const names={collection:"Sammlung",inbox:"Medieneingang",library:"Serverbibliothek",source:"Quellordner"};
+  const location=book.storage;
+  return [tr(names[location?.kind]||"Serverbibliothek"),location?.path].filter(Boolean).join(" / ");
+}
+function compareOptional(left,right,direction=1){
+  if(!left||!right)return Number(!left)-Number(!right);
+  return byName.compare(left,right)*direction;
+}
+function volumeOrder(left,right){
+  const volume=value=>{
+    const text=String(value??"").trim().replace(",",".");
+    return text && Number.isFinite(Number(text)) ? Number(text) : Infinity;
+  };
+  return volume(left)-volume(right)||compareOptional(String(left??""),String(right??""));
+}
 function compareBooks(a,b){
   const order=$("shelfSort").value,title=byName.compare(a.title,b.title);
   if(order==="az"||order==="za")return order==="az"?title:-title;
   if(order==="author")return byName.compare(a.authors[0]?.name||"",b.authors[0]?.name||"")||title;
+  if(order==="series"||order==="seriesDesc"){
+    const left=String(a.metadata?.series||"").trim(),right=String(b.metadata?.series||"").trim();
+    return compareOptional(left,right,order==="series"?1:-1)
+      ||(left&&right?volumeOrder(a.metadata?.volume,b.metadata?.volume):0)||title||a.id-b.id;
+  }
+  if(order==="location"||order==="locationDesc"){
+    return byName.compare(storageLabel(a),storageLabel(b))*(order==="location"?1:-1)||title||a.id-b.id;
+  }
   const direction=order==="old"?1:-1;
   if(a.category==="podcast"&&b.category==="podcast"){
     const left=a.podcast?.published,right=b.podcast?.published;

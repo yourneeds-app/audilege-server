@@ -1,8 +1,10 @@
-# Audilege Server 0.4.4
+# Audilege Server 0.4.5
 
 For Windows and Linux, with a German and English web interface. See [the English quick start](README.en.md) and the [release downloads](https://github.com/yourneeds-app/audilege-server/releases).
 
-## Update auf 0.4.4
+## Update auf 0.4.5
+
+Im Webregal lässt sich nach Reihe oder Speicherort in beide Richtungen sortieren. Innerhalb einer Reihe folgen die Bände ihrer Nummer. „Reihe anzeigen“ blendet Reihennamen und vorhandene Bandnummern unter den Titeln ein. Bei der Sortierung nach Speicherort zeigen gescannte Titel ihren relativen Quellpfad. Bei einer Ordnerstruktur wie `Autor/Reihe/Vol 02 - Titel` ergänzt das Webregal fehlende Reihen- und Bandangaben aus dem Pfad. Vorhandene Angaben haben Vorrang.
 
 Der Scanner fasst CD-Unterordner innerhalb eines Titelordners zu einem Hörbuch zusammen, etwa `Autor/Buchtitel/CD 1` und `Autor/Buchtitel/CD 2`. Die Wiedergabe folgt der Nummerierung von CDs und Titeln. Bereits einzeln eingelesene CD-Ordner werden beim nächsten stabilen Scan im Regal zusammengeführt. Das gilt für den Medieneingang und direkt eingebundene Sammlungen.
 
