@@ -1,67 +1,166 @@
 "use strict";
-const numbers = new Intl.NumberFormat(uiLanguage);
-const prettyDay = new Intl.DateTimeFormat(uiLanguage,{day:"numeric",month:"short",timeZone:"UTC"});
+const numbers=new Intl.NumberFormat(uiLanguage);
 const dayMs=86400000;
 function dayKey(time){return new Date(time).toISOString().slice(0,10);}
+const dateLabel=new Intl.DateTimeFormat(uiLanguage,{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"});
+const monthLabel=new Intl.DateTimeFormat(uiLanguage,{month:"short",timeZone:"UTC"});
+
 function statCard(label,value){
-  const card=el("div",null,"statCard");card.append(el("strong",value),el("span",label));return card;
+  const card=el("div",null,"statCard");
+  card.append(el("strong",value),el("span",label));
+  return card;
 }
-function listeningDashboard(body,s) {
-  const days=s.listeningDays,keys=Object.keys(days).sort();
-  const today=dayKey(Date.now()),midnight=Date.parse(today+"T00:00:00Z");
-  const total=Object.values(days).reduce((a,b)=>a+b,0);
-  const counts=el("div",null,"statCards");
-  counts.append(statCard(tr("Gehörte Medien"),numbers.format(s.heardMedia)),statCard(tr("Hörtage"),numbers.format(keys.length)),
-    statCard(tr("Hörminuten"),numbers.format(Math.round(total/60))));
-  body.append(counts);
-  const area=el("div",null,"activitySplit"),week=el("section",null,"panel"),recent=el("section",null,"panel");
-  body.append(area);area.append(week,recent);
-  week.append(el("h2",tr("Hörminuten der letzten sieben Tage")));
-  const bars=el("div",null,"weekBars"),weekDays=Array.from({length:7},(_,i)=>dayKey(midnight+(i-6)*dayMs));
-  const high=Math.max(60,...weekDays.map(d=>days[d]||0));week.append(bars);
-  for(const day of weekDays){
-    const col=el("div"),value=days[day]||0,bar=el("i");
-    bar.style.height=(100*value/high)+"%";
-    col.title=prettyDay.format(new Date(day))+" · "+duration(value);
-    col.append(el("small",numbers.format(Math.round(value/60))),bar,el("span",new Date(day).toLocaleDateString(uiLanguage,{weekday:"short",timeZone:"UTC"})));
-    bars.append(col);
+function activityRange(period,anchor){
+  const date=new Date(anchor),year=date.getUTCFullYear(),month=date.getUTCMonth();
+  if(period==="year")return [Date.UTC(year,0,1),Date.UTC(year+1,0,1)];
+  if(period==="month")return [Date.UTC(year,month,1),Date.UTC(year,month+1,1)];
+  const start=anchor-((date.getUTCDay()+6)%7)*dayMs;
+  return [start,start+7*dayMs];
+}
+
+function dashboardCalendar(start,end,today,days){
+  const panel=el("section",null,"panel yearPanel"),scroll=el("div",null,"calendarScroll");
+  const months=el("div",null,"yearMonths"),grid=el("div",null,"yearGrid");
+  const year=new Date(start).getUTCFullYear();
+  const peak=Math.max(1,...Object.entries(days).filter(([day])=>day.startsWith(year+"-")).map(([,value])=>value));
+  panel.append(el("h2",tr("Aktivitätskalender")),scroll);
+  scroll.append(months,grid);
+  for(let month=0;month<12;month++)months.append(el("span",monthLabel.format(new Date(Date.UTC(year,month,1)))));
+  for(let i=0;i<(new Date(start).getUTCDay()+6)%7;i++)grid.append(el("i"));
+  for(let at=start;at<Math.min(end,today+dayMs);at+=dayMs){
+    const value=days[dayKey(at)]||0,cell=el("i",null,"heat");
+    cell.dataset.level=value?String(Math.max(1,Math.ceil(4*Math.sqrt(value/peak)))):"0";
+    cell.title=dateLabel.format(new Date(at))+" · "+duration(value/1000);grid.append(cell);
   }
-  const sum=weekDays.reduce((a,k)=>a+(days[k]||0),0);
-  const weekly=el("div",null,"weeklySummary");
-  weekly.append(statCard(tr("7 Tage gesamt"),duration(sum)),statCard(tr("Täglicher Ø"),duration(sum/7)),statCard(tr("Aktuelle Serie"),s.streak.current+" "+tr(s.streak.current===1?"Tag":"Tage")),statCard(tr("Längste Serie"),s.streak.best+" "+tr(s.streak.best===1?"Tag":"Tage")));
-  week.append(weekly);
-  recent.append(el("h2",tr("Letzte Aktivitäten")));
-  const list=el("div",null,"recentList");
-  function events(expanded){
-    list.replaceChildren();
-    if(!s.events.length)list.append(el("p",tr("Noch keine Sitzungen erfasst.")));
-    for(const e of s.events.slice(0,expanded?100:5)){
-      const row=el("div",null,"row"),description=el("div");
-      const when=e.started?new Date(e.started).toLocaleString(uiLanguage,{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):prettyDay.format(new Date(e.day));
-      description.append(el("strong",e.title||tr("Unbekannter Titel")),el("small",({read:tr("Lesen"),listen:tr("Hören"),tts:tr("Vorlesen")}[e.kind]||e.kind)+" · "+when));
-      row.append(description,el("span",duration(e.seconds)));list.append(row);
+  return panel;
+}
+
+function listeningDashboard(body,data){
+  const today=Date.parse(dayKey(Date.now())+"T00:00:00Z");
+  const modes={listen:tr("Hören"),read:tr("Lesen"),tts:tr("Vorlesen")};
+  const filters=el("div",null,"statsFilters");
+  const kind=choices([["",tr("Alle Aktivitäten")],...Object.entries(modes)],"");
+  const range=choices([["week",tr("Woche")],["month",tr("Monat")],["year",tr("Jahr")],["all",tr("Gesamt")]],"week");
+  kind.setAttribute("aria-label",tr("Aktivität"));
+  range.setAttribute("aria-label",tr("Zeitraum"));
+  const prev=el("button","←"),next=el("button","→");
+  prev.setAttribute("aria-label",tr("Vorheriger Zeitraum"));
+  next.setAttribute("aria-label",tr("Nächster Zeitraum"));
+  const heading=el("strong"), output=el("div");
+  heading.setAttribute("aria-live","polite");
+  filters.append(kind,range,prev,heading,next);
+  body.append(filters,output);
+  let anchor=today, selection=null;
+  function shift(direction){
+    const [start,end]=activityRange(range.value,anchor);
+    anchor=direction<0?start-dayMs:end;
+    selection=null;render();
+  }
+  prev.onclick=()=>shift(-1);next.onclick=()=>shift(1);
+  kind.onchange=()=>{selection=null;render();};
+  range.onchange=()=>{anchor=today;selection=null;render();};
+
+  function render(){
+    const period=range.value,activeKind=kind.value;
+    const activities=activeKind?[data.activities[activeKind]].filter(Boolean):Object.values(data.activities);
+    const activitiesDays={},titles=new Map();
+    for(const activity of activities){
+      for(const [d,m] of Object.entries(activity.days))activitiesDays[d]=(activitiesDays[d]||0)+m;
+      for(const [key,item] of Object.entries(activity.books)){
+        if(!titles.has(key))titles.set(key,{title:item.title,author:item.author,days:{}});
+        const timeline=titles.get(key).days;
+        for(const [d,m] of Object.entries(item.days))timeline[d]=(timeline[d]||0)+m;
+      }
     }
-    if(s.events.length>5){const more=el("button",expanded?tr("Weniger anzeigen"):tr("Mehr anzeigen"),"textButton");more.onclick=()=>events(!expanded);list.append(more);}
-  }
-  events(false);recent.append(list);
-  const calendar=el("section",null,"panel yearPanel"),heading=el("header"),select=el("select"),details=el("div");
-  select.setAttribute("aria-label",tr("Jahr auswählen"));
-  const years=[...new Set([today.slice(0,4),...keys.map(k=>k.slice(0,4))])].sort().reverse();
-  select.replaceChildren(...years.map(y=>new Option(y,y)));
-  heading.append(el("h2",tr("Dein Hörjahr")),select);calendar.append(heading,details);body.append(calendar);
-  function renderYear(){
-    const y=select.value,start=Date.UTC(+y,0,1),end=Math.min(Date.UTC(+y+1,0,1),midnight+dayMs);
-    const values=keys.filter(k=>k.startsWith(y+"-")),peak=Math.max(1,...values.map(k=>days[k]));
-    details.replaceChildren(el("p",values.length+tr(" Hörtage · ")+duration(values.reduce((a,k)=>a+days[k],0))));
-    const scroll=el("div",null,"calendarScroll"),months=el("div",null,"yearMonths"),grid=el("div",null,"yearGrid");
-    for(let month=0;month<12;month++)months.append(el("span",new Date(Date.UTC(+y,month,1)).toLocaleDateString(uiLanguage,{month:"short",timeZone:"UTC"})));
-    for(let i=0;i<(new Date(start).getUTCDay()+6)%7;i++)grid.append(el("i"));
-    for(let t=start;t<end;t+=dayMs){
-      const day=dayKey(t),value=days[day]||0,cell=el("i");
-      cell.className="heat";cell.dataset.level=value?String(Math.max(1,Math.ceil(4*Math.sqrt(value/peak)))):"0";
-      cell.title=prettyDay.format(new Date(t))+" · "+duration(value);grid.append(cell);
+    const keys=Object.keys(activitiesDays).sort();
+    const [start,end]=period==="all"?
+      [Date.UTC(Number(keys[0]?.slice(0,4)||new Date(today).getUTCFullYear()),0,1),today+dayMs]:
+      activityRange(period,anchor);
+    const rangeStart=dayKey(start),rangeEnd=dayKey(end);
+    const inRange=key=>key>=rangeStart&&key<rangeEnd;
+    const visibleDays=keys.filter(inRange);
+    const overall=visibleDays.reduce((sum,d)=>sum+activitiesDays[d],0);
+    heading.textContent=period==="all"?tr("Gesamt"):
+      dateLabel.format(new Date(start))+" – "+dateLabel.format(new Date(Math.min(end-dayMs,today)));
+    prev.hidden=next.hidden=period==="all";
+    next.disabled=end>today;
+    const rank=window=>[...titles].map(([id,item])=>{
+      const millis=Object.entries(item.days).reduce((sum,[d,m])=>sum+(window(d)?m:0),0);
+      return {id,...item,millis};
+    }).filter(item=>item.millis>0).sort((a,b)=>b.millis-a.millis);
+    const cards=el("div",null,"statCards");
+    cards.append(statCard(tr("Aktivität im Zeitraum"),duration(overall/1000)),
+      statCard(tr("Aktive Tage"),numbers.format(visibleDays.length)),
+      statCard(tr("Aktive Titel"),numbers.format(rank(inRange).length)),
+      statCard(tr("Aktuelle Serie"),numbers.format(data.streak.current)+" "+tr(data.streak.current===1?"Tag":"Tage")),
+      statCard(tr("Längste Serie"),numbers.format(data.streak.best)+" "+tr(data.streak.best===1?"Tag":"Tage")),
+      statCard(tr("Täglicher Ø"),duration(overall/1000/Math.max(1,(Math.min(end,today+dayMs)-start)/dayMs))));
+    const chart=el("section",null,"panel");
+    chart.append(el("h2",tr("Aktivität nach Zeitraum")));
+    const bars=el("div",null,"activityBars"),chartScroll=el("div",null,"activityChartScroll");
+    const buckets=[];
+    for(let at=start;at<Math.min(end,today+dayMs);){
+      const d=new Date(at),year=d.getUTCFullYear(),month=d.getUTCMonth();
+      const until=period==="all"?Date.UTC(year+1,0,1):period==="year"?Date.UTC(year,month+1,1):at+dayMs;
+      const from=dayKey(at),to=dayKey(until);
+      const millis=visibleDays.filter(key=>key>=from&&key<to).reduce((sum,key)=>sum+activitiesDays[key],0);
+      const label=period==="all"?String(year):period==="year"?monthLabel.format(d):String(d.getUTCDate());
+      buckets.push({at,from,to,label,millis});at=until;
     }
-    scroll.append(months,grid);details.append(scroll);
+    const peak=Math.max(1,...buckets.map(b=>b.millis));
+    const selectedLabel=el("p",null,"muted");
+    selectedLabel.setAttribute("aria-live","polite");
+    const details=el("div",null,"activitySplit");
+    function showDetails(){
+      const window=key=>inRange(key)&&(!selection||(key>=selection.from&&key<selection.to));
+      selectedLabel.textContent=selection?
+        dateLabel.format(new Date(selection.at))+" · "+duration(selection.millis/1000):tr("Wähle einen Balken, um den Zeitraum einzugrenzen.");
+      const top=el("section",null,"panel"),recent=el("section",null,"panel recentList");
+      top.append(el("h2",tr("Aktivität pro Titel")));
+      const ranked=rank(window);
+      function showTitles(expanded){
+        while(top.childNodes.length>1)top.lastChild.remove();
+        for(const item of ranked.slice(0,expanded?ranked.length:10)){
+          const row=el("div",null,"row statsTitleRow"),book=books.find(b=>"orbit:"+b.id===item.id);
+          if(book){
+            const link=action("",()=>openReader(book),"textButton");
+            link.append(cover(book),el("span",item.title));row.append(link);
+          }else row.append(el("span",item.title));
+          row.append(el("strong",duration(item.millis/1000)));top.append(row);
+        }
+        if(!ranked.length)top.append(el("p",tr("Noch keine Sitzungen erfasst.")));
+        if(ranked.length>10)top.append(action(tr(expanded?"Weniger anzeigen":"Mehr anzeigen"),()=>showTitles(!expanded),"textButton"));
+      }
+      showTitles(false);
+      recent.append(el("h2",tr("Letzte Aktivitäten")));
+      const events=data.events.filter(event=>(!activeKind||event.kind===activeKind)&&window(event.day));
+      for(const event of events.slice(0,10)){
+        const row=el("div",null,"row"),label=el("div");
+        const when=event.started?new Date(event.started).toLocaleString(uiLanguage,{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):dateLabel.format(new Date(event.day));
+        label.append(el("strong",event.title),el("small",(modes[event.kind]||event.kind)+" · "+when));
+        row.append(label,el("span",duration(event.seconds)));recent.append(row);
+      }
+      if(!events.length)recent.append(el("p",tr("Keine jüngeren Sitzungen in diesem Zeitraum.")));
+      details.replaceChildren(top,recent);
+    }
+    for(const bucket of buckets){
+      const button=el("button"),shaft=el("span",null,"activityBarTrack"),bar=el("i");
+      bar.style.height=(100*bucket.millis/peak)+"%";
+      shaft.append(bar);
+      button.append(shaft,el("span",bucket.label));
+      button.setAttribute("aria-label",dateLabel.format(new Date(bucket.at))+" · "+duration(bucket.millis/1000));
+      button.setAttribute("aria-pressed",String(selection===bucket));
+      button.onclick=()=>{
+        selection=selection===bucket?null:bucket;
+        [...bars.children].forEach(child=>child.setAttribute("aria-pressed",String(child===button&&Boolean(selection))));
+        showDetails();
+      };
+      bars.append(button);
+    }
+    chartScroll.append(bars);chart.append(chartScroll,selectedLabel);
+    output.replaceChildren(cards,chart,details);
+    if(period==="year")output.append(dashboardCalendar(start,end,today,activitiesDays));
+    showDetails();
   }
-  select.onchange=renderYear;renderYear();
+  render();
 }

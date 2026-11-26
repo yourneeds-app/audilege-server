@@ -229,6 +229,7 @@ let podcastFilter="",allEpisodes=false;
 function openPodcastFolder(key=""){
   shelfPage="library";facetValue="";
   category="podcast";podcastFilter=key;allEpisodes=false;$("bookSearch").value="";renderShelf();
+  rememberRoute("shelf");
   $("shelfTitle").scrollIntoView({block:"start"});
 }
 function podcastShowCover(show){
@@ -277,13 +278,13 @@ function podcastShelf(shelf,items,term){
   }
   if(newest.length>10){const more=el("button",allEpisodes?tr("Weniger anzeigen"):tr("Alle Folgen anzeigen"),"textButton");more.onclick=()=>{allEpisodes=!allEpisodes;renderShelf();};feed.append(more);}
   shows.append(el("h3",tr("Nach Podcast")));
-  if(podcastFilter){const clear=el("button",tr("Alle Podcasts"),"textButton");clear.onclick=()=>{podcastFilter="";allEpisodes=false;renderShelf();};shows.append(clear);}
+  if(podcastFilter){const clear=el("button",tr("Alle Podcasts"),"textButton");clear.onclick=()=>{podcastFilter="";allEpisodes=false;renderShelf();rememberRoute("shelf");};shows.append(clear);}
   for(const g of [...groups.values()].sort((a,b)=>a.show.localeCompare(b.show,uiLanguage))){
     const b=el("button",null,"showRow");b.setAttribute("aria-pressed",String(podcastFilter===g.key));
     const details=el("span",null,"showDetails");
     details.append(el("strong",g.show),el("small",[g.creator!==g.show?g.creator:"",g.count+(g.count===1?tr(" Folge"):tr(" Folgen"))].filter(Boolean).join(" · ")));
     b.append(podcastShowCover(g),details);
-    b.onclick=()=>{podcastFilter=podcastFilter===g.key?"":g.key;allEpisodes=false;renderShelf();};shows.append(b);
+    b.onclick=()=>{podcastFilter=podcastFilter===g.key?"":g.key;allEpisodes=false;renderShelf();rememberRoute("shelf");};shows.append(b);
   }
   if(account?.is_admin){const add=el("button",tr("Feed abonnieren"),"textButton");add.onclick=()=>{imports();$("type").value="rss";configure();$("feedUrl").focus();};shows.append(add);}
   layout.append(feed,shows);shelf.append(layout);

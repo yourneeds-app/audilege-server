@@ -132,3 +132,11 @@ function staticLocale(){
   document.title=tr(document.title);
 }
 staticLocale();
+
+Object.assign(strings,{
+  "Alle Aktivitäten":"All activity","Aktivität":"Activity","Zeitraum":"Period","Woche":"Week","Monat":"Month","Jahr":"Year","Gesamt":"All time",
+  "Vorheriger Zeitraum":"Previous period","Nächster Zeitraum":"Next period","Aktivität im Zeitraum":"Activity in period",
+  "Aktive Tage":"Active days","Aktive Titel":"Active titles","Aktivität nach Zeitraum":"Activity over time",
+  "Aktivität pro Titel":"Activity by title","Wähle einen Balken, um den Zeitraum einzugrenzen.":"Select a bar to narrow down the period.",
+  "Keine jüngeren Sitzungen in diesem Zeitraum.":"No recent sessions in this period.","Aktivitätskalender":"Activity calendar"
+});

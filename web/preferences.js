@@ -37,7 +37,11 @@ function renderSidebarCategories(groups){
   }
 }
 $("discoverNav").onclick=()=>{resetShelf();discovering=true;home().catch(hint);};
-$("profileNav").onclick=async()=>{await leaveReader();show("profileView");$("profileName").textContent=account.name;$("profileServer").textContent=new URL(".",document.baseURI).href;};
+async function openProfileView(){
+  await leaveReader();show("profileView");$("profileName").textContent=account.name;
+  $("profileServer").textContent=new URL(".",document.baseURI).href;
+}
+$("profileNav").onclick=()=>openProfileView().catch(hint);
 $("settingsNav").onclick=async()=>{await leaveReader();show("settingsView");};
 $("shelfSort").value=localStorage.getItem("audilege-sort")||"new";
 $("shelfSort").onchange=()=>{localStorage.setItem("audilege-sort",$("shelfSort").value);renderShelf();};

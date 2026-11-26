@@ -78,6 +78,20 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.call("/api/v1/dashboard/scrollers/continue-reading")["books"][0]["id"],b)
         self.assertEqual(self.call("/api/v1/books/query",{"pagination":{"page":0,"size":10}})["total"],1)
 
+    def test_bulk_statistics_sync_is_idempotent_and_keeps_archived_activity(self):
+        path="/api/v1/user-statistics/sync"
+        session=dict(fileId=42,sessionId="fixture-once",title="Fiktive entfernte Folge",sessionType="listen",
+                     startedAt="2026-11-25T12:00:00Z",endedAt="2026-11-25T12:00:15Z",durationSeconds=15)
+        for _ in range(2):
+            result=self.call(path,{"sessions":[session]})
+            self.assertEqual(result["accepted"],["fixture-once"])
+            self.assertEqual(result["overview"]["audilegeActivities"]["listen"]["days"],{"2026-11-25":15000})
+        self.lib.user("zweites-profil","fixture-password")
+        other=self.call("/api/v1/auth/login",{"username":"zweites-profil","password":"fixture-password"})["accessToken"]
+        self.assertEqual(self.call(path,{"sessions":[]},headers={"Authorization":"Bearer "+other})
+                         ["overview"]["audilegeActivities"],{})
+        self.assertEqual(self.call("/web/statistics")["events"][0]["title"],"Fiktive entfernte Folge")
+
     def test_reader_compresses_index_and_text_without_changing_byte_ranges(self):
         source=io.BytesIO()
         with ZipFile(io.BytesIO(epub(True))) as original, ZipFile(source,"w") as updated:

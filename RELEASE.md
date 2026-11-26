@@ -1,7 +1,7 @@
 ## Deutsch
 
-Audilege zeigt Kanalbilder in der Podcastliste. Der Server übernimmt sie aus RSS, vom zugehörigen YouTube-Kanal oder aus eindeutig passenden Apple-Podcasts-Einträgen.
+Filterbare Aktivitätsstatistik mit Zeiträumen, auswählbaren Balken und Zeit pro Titel. Neuladen und Browser-Zurück behalten die Audilege-Navigation. Android kann Statistik und ausstehende Sitzungen in einem Abgleich übertragen.
 
 ## English
 
-Audilege shows channel artwork in the podcast list. The server retrieves it from RSS, the associated YouTube channel, or an exact Apple Podcasts match.
+Filter activity by type and period, select chart bars, and inspect time by title. Reload and browser Back respect Audilege navigation. Android can sync queued sessions with its statistics in one request.

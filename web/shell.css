@@ -67,3 +67,17 @@
 .shelfTools .seriesSwitch input {width:1rem;height:1rem;margin:0;accent-color:var(--accent)}
 .shelfTools .seriesSwitch[hidden] {display:none}
 .book .shelfLocation {overflow-wrap:anywhere}
+
+.statsFilters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:1rem}
+.statsFilters strong{text-align:center;min-width:9rem}
+.activityChartScroll{overflow-x:auto}
+.activityBars{display:flex;gap:.25rem;margin:.7rem 0;min-height:9rem}
+.activityBars button{display:grid;grid-template-rows:1fr auto;gap:.35rem;justify-items:center;
+    flex:1;min-width:2.35rem;padding:.25rem;background:transparent;border-color:transparent;font-size:.8rem}
+.activityBars button[aria-pressed=true]{background:var(--tint);border-color:var(--accent)}
+.activityBarTrack{width:100%;height:7rem;display:flex;align-items:flex-end;justify-content:center;border-bottom:1px solid var(--line)}
+.activityBarTrack i{width:72%;background:var(--accent);border-radius:.25rem .25rem 0 0}
+.statsTitleRow{align-items:center}
+.statsTitleRow button{display:flex;align-items:center;gap:.6rem;margin:0;text-align:start;overflow-wrap:anywhere}
+.statsTitleRow button .art{flex:none;width:2.25rem;aspect-ratio:2/3;font-size:.6rem;padding:0}
+.statsTitleRow>strong{white-space:nowrap}

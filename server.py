@@ -23,7 +23,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import xml.etree.ElementTree as ET
 import zipfile
 
-from abs_history import apply_import, number
+from abs_history import apply_import, identifier, number
 from books import audio_art_path, epub_fields,resource,source_audio_art,xml
 from library import AUDIO, Library, ROOT, TYPES, get_progress, save_progress
 from metadata import SOURCES, fetch_cover, image_type, search
@@ -204,6 +204,28 @@ def podcast_subscriptions(db):
                  creator=row["creator"],cover=bool(row["art"]))
             for row in db.execute("""SELECT f.id,f.url,f.title,f.creator,a.feed AS art FROM podcast_feeds f
                                      LEFT JOIN podcast_art a ON a.feed=f.id ORDER BY f.title COLLATE NOCASE,f.id""")]
+
+
+def activity_overview(db,owner,activity):
+    rows=db.execute("""SELECT coalesce(json_extract(p.data,'$.percentage'),0), EXISTS(
+        SELECT 1 FROM player_items i WHERE i.book=b.id AND i.owner=? AND i.kind='played')
+        FROM books b LEFT JOIN progress p ON p.edition=b.edition AND p.owner=?
+        WHERE b.merged_into IS NULL AND b.category<>'podcast'""",(owner,owner)).fetchall()
+    return dict(audilegeActivities=activity["activities"],trackedBooks=len(rows),
+                startedBooks=sum(pct>0 or played for pct,played in rows),
+                inProgressBooks=sum(not played and 0<pct<100 for pct,played in rows),
+                completedBooks=sum(played or pct>=100 for pct,played in rows))
+
+
+def store_activity_session(db,owner,edition,data,archived_title=None):
+    start,end=[datetime.fromisoformat(data[k].replace("Z","+00:00")) for k in ("startedAt","endedAt")]
+    seconds=int(number(data["durationSeconds"],(end-start).total_seconds()+1))
+    sid=identifier(data["sessionId"])
+    if data["sessionType"] not in ("read","listen","tts"):
+        raise ValueError("Unbekannte Sitzungsart.")
+    db.execute("""INSERT OR IGNORE INTO sessions(owner,edition,sid,start,end,seconds,kind,archived_title)
+        VALUES(?,?,?,?,?,?,?,?)""",(owner,edition,sid,data["startedAt"],data["endedAt"],seconds,data["sessionType"],archived_title))
+    return sid
 
 
 def stats(db,owner):
@@ -736,11 +758,7 @@ class Handler(BaseHTTPRequestHandler):
                         return self.stream(file,"application/epub+zip",download=True)
                 if match[2]=="sessions" and method=="POST":
                     d=self.body()
-                    start,end=[datetime.fromisoformat(d[k].replace("Z","+00:00")) for k in ("startedAt","endedAt")]
-                    duration=int(number(d["durationSeconds"],(end-start).total_seconds()+1))
-                    if d["sessionType"] not in ("read","listen","tts"):
-                        raise ValueError("Unbekannte Sitzungsart.")
-                    db.execute("INSERT OR IGNORE INTO sessions(owner,edition,sid,start,end,seconds,kind) VALUES(?,?,?,?,?,?,?)",(owner,edition,d["sessionId"],d["startedAt"],d["endedAt"],duration,d["sessionType"]))
+                    store_activity_session(db,owner,edition,d)
                     db.commit()
                     return self.output({})
             match=re.fullmatch(r"/web/editions/(\d+)|/api/v1/epub/(\d+)/(?:media-overlay/)?file/(.+)",path)
@@ -779,9 +797,23 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/v1/user-statistics/daily-reading" and method=="GET":
                 return self.output([{"day":k,"readingSeconds":int(v)} for k,v in sorted(merged(db,owner)["days"].items())])
             if path=="/api/v1/user-statistics/summary" and method=="GET":
-                items=catalog(db,owner)
-                return self.output(dict(audilegeActivities=merged(db,owner)["activities"],trackedBooks=len(items),startedBooks=sum(b["readingProgress"]>0 for b in items),
-                    inProgressBooks=sum(0<b["readingProgress"]<100 for b in items),completedBooks=sum(b["readingProgress"]>=100 for b in items)))
+                return self.output(activity_overview(db,owner,merged(db,owner)))
+            if path=="/api/v1/user-statistics/sync" and method=="POST":
+                events=self.body()["sessions"]
+                if not isinstance(events,list) or len(events)>200:
+                    raise ValueError("Zu viele Sitzungen für einen Abgleich.")
+                db.execute("BEGIN IMMEDIATE" if events else "BEGIN")
+                receipts=[]
+                for event in events:
+                    edition=event["fileId"]
+                    if type(edition) is not int or edition<=0:
+                        raise ValueError("Ungültige Ausgabe.")
+                    exists=db.execute("SELECT 1 FROM editions WHERE id=?",(edition,)).fetchone()
+                    label=None if exists else str(event.get("title") or "")[:300]
+                    receipts.append(store_activity_session(db,owner,edition,event,label))
+                overview=activity_overview(db,owner,merged(db,owner))
+                db.commit()
+                return self.output(dict(accepted=receipts,timezone="UTC",overview=overview))
             self.output({"error":"Nicht gefunden."},404)
 
     def handle_api(self):

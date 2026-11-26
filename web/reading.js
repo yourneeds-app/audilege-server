@@ -42,6 +42,7 @@ async function changeMode(mode) {
     else if(!loadedAudio||loadedChapter!==chapter)setCue(Math.max(0,cueIndex));
   }
   syncMode(savedOffset);
+  if(playerVisible())rememberRoute("reader",current.id,mode);
   dirty=true;
   await queueProgress();
   if(wasPlaying&&!isPaged())await media.play();
