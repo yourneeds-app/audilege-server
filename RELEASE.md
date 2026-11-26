@@ -1,7 +1,7 @@
 ## Deutsch
 
-Die Android-App erhält beim Hören das Hörbuchcover einer Mitlesefassung. Katalog und Startseite zeigen bereinigte Titel für ältere Einträge mit Bandpräfix und wiederholtem Reihenhinweis.
+Android kann vom reinen Hörbuch direkt zur bereits vorhandenen Mitlesefassung wechseln. Der Server meldet dazu eine verknüpfte oder eindeutig passende Mitlesefassung.
 
 ## English
 
-Android can retrieve the audiobook cover of a read-along edition while listening. The catalog and home screen clean up legacy titles with a volume prefix and a repeated series credit.
+Android can switch from the audiobook to its existing read-along edition. The server returns a linked or uniquely matching read-along edition.

@@ -218,7 +218,9 @@ class ServerTest(unittest.TestCase):
         import maintenance
         with self.lib.db() as db:maintenance.retention(self.lib,db,{"job":1,"action":"trash","confirmed":True})
         self.assertEqual((art("book"),art("audio")),(book_art,png))
-        self.assertEqual(self.call(f"/api/v1/books/{audio}")["id"],audio)
+        old_audio=self.call(f"/api/v1/books/{audio}")
+        self.assertEqual(old_audio["id"],audio)
+        self.assertEqual(old_audio["readAlongBookId"],book)
 
     def test_abs_import_preview_repeat_profile_and_rollback(self):
         one={"id":"s-1","libraryItemId":"b","displayTitle":"Das Testbuch","date":"2024-03-31","timeListening":43}

@@ -760,6 +760,18 @@ class Handler(BaseHTTPRequestHandler):
                         raise KeyError("Kein Cover vorhanden.")
                     return self.artwork(resource(folder,edition["cover"]),mimetypes.guess_type(edition["cover"])[0] or "application/octet-stream",small,versioned)
                 detail=catalog(db,owner,book,storage_roots=self.catalog_roots())[0]
+                if detail["category"]=="audio":
+                    source=db.execute("SELECT merged_into,author FROM books WHERE id=?",(book,)).fetchone()
+                    aligned=db.execute("SELECT id FROM books WHERE id=? AND category='audilege' AND merged_into IS NULL",
+                                       (source["merged_into"],)).fetchone()
+                    if aligned:
+                        detail["readAlongBookId"]=aligned["id"]
+                    elif source["author"]:
+                        normalized=detail["title"].casefold()
+                        matches=[row["id"] for row in db.execute("""SELECT id,title FROM books
+                            WHERE merged_into IS NULL AND category='audilege' AND author=? COLLATE NOCASE""",(source["author"],))
+                                 if display_audiobook_title(row["title"]).casefold()==normalized]
+                        if len(matches)==1:detail["readAlongBookId"]=matches[0]
                 if detail["category"] in ("audio","ebook"):
                     paired=next((item for item in catalog(db,owner,show_editions=True) if item["id"]==book),None)
                     if paired and paired.get("companionId"):
