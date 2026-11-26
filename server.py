@@ -55,10 +55,13 @@ def catalog(db,owner,book_id=None,start=False,storage_roots=None,show_editions=F
         ORDER BY s.source LIMIT 1) AS storage_source,"""
     if storage_roots is not None:
         storage_column += "(SELECT x.path FROM readalong_exports x WHERE x.edition=b.edition) AS export_path,"
-    for b in db.execute("SELECT "+storage_column+""" b.*,e.cover,p.data,pi.feed,pi.show_title,pi.published,coalesce(nullif(pf.creator,''),pi.creator) AS creator,
+    for b in db.execute("SELECT "+storage_column+""" b.*,e.cover,p.data,pi.feed,pi.show_title,pi.published,pf.id AS subscription,
+        pf.art_checked,pa.feed AS show_art,
+        pi.metadata AS episode_metadata,coalesce(nullif(pf.creator,''),pi.creator) AS creator,
         EXISTS(SELECT 1 FROM player_items i WHERE i.book=b.id AND i.owner=? AND i.kind='played') AS played,
         (EXISTS(SELECT 1 FROM book_covers c WHERE c.book=b.id) OR EXISTS(SELECT 1 FROM role_covers c WHERE c.book=b.id)) AS custom_cover FROM books b JOIN editions e ON e.id=b.edition
         LEFT JOIN podcast_items pi ON pi.book=b.id LEFT JOIN podcast_feeds pf ON pf.url=pi.feed
+        LEFT JOIN podcast_art pa ON pa.feed=pf.id
         LEFT JOIN progress p ON p.edition=b.edition AND p.owner=? WHERE
         ((? IS NULL AND b.merged_into IS NULL) OR b.id=?)"""+where+" ORDER BY b.title COLLATE NOCASE,b.id",args):
         prog = json.loads(b["data"]) if b["data"] else {}
@@ -103,7 +106,13 @@ def catalog(db,owner,book_id=None,start=False,storage_roots=None,show_editions=F
                     title=re.sub(r"\s+\(jubiläumsausgabe\)$","",out[-1]["title"],flags=re.I)
                     key=(b["author"].casefold(),str(meta.get("series","")).casefold(),str(meta["volume"]),title.casefold())
                     linked_audio.setdefault(key,[]).append((b["id"],Path(b["storage_source"])))
+        if b["subscription"] is not None:
+            out[-1]["cover"]=bool(b["show_art"])
+            out[-1]["coverRevision"]=f'{b["edition"]}-podcast-{b["art_checked"]}-{bool(b["show_art"])}'
+            out[-1]["covers"]={"audio":out[-1]["coverRevision"] if b["show_art"] else None}
         if b["feed"]:
+            local_metadata=out[-1]["metadata"]
+            out[-1]["metadata"]=json.loads(b["episode_metadata"])|local_metadata
             out[-1]["podcast"]={"show":b["show_title"],"creator":b["creator"],"published":b["published"],
                                 "key":hashlib.sha256(b["feed"].encode()).hexdigest()}
     if show_editions:
@@ -718,6 +727,13 @@ class Handler(BaseHTTPRequestHandler):
                 if suffix:
                     small=suffix=="/thumbnail" and param("size")=="360"
                     cover_book=db.execute("SELECT category,cover_revision FROM books WHERE id=?",(book,)).fetchone()
+                    if cover_book["category"]=="podcast":
+                        subscription=db.execute("""SELECT a.mime,a.image FROM podcast_items p
+                            JOIN podcast_feeds f ON f.url=p.feed LEFT JOIN podcast_art a ON a.feed=f.id
+                            WHERE p.book=?""",(book,)).fetchone()
+                        if subscription is not None:
+                            if not subscription["mime"]:raise KeyError("Kein Sendungscover vorhanden.")
+                            return self.artwork(subscription["image"],subscription["mime"],small)
                     variant=param("art") or ("audio" if cover_book["category"] in ("audio","podcast") else "book")
                     versioned=param("rev")==f'{edition["id"]}-{cover_book["cover_revision"]}'
                     override=db.execute("SELECT mime,image FROM role_covers WHERE book=? AND role=?",(book,variant)).fetchone()

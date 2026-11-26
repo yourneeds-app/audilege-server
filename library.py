@@ -240,6 +240,8 @@ class Library:
                 db.execute("ALTER TABLE podcast_items ADD COLUMN published INTEGER")
             if "creator" not in [r[1] for r in db.execute("PRAGMA table_info(podcast_items)")]:
                 db.execute("ALTER TABLE podcast_items ADD COLUMN creator TEXT")
+            if "metadata" not in [r[1] for r in db.execute("PRAGMA table_info(podcast_items)")]:
+                db.execute("ALTER TABLE podcast_items ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'")
             feed_columns={row[1] for row in db.execute("PRAGMA table_info(podcast_feeds)")}
             if "art_checked" not in feed_columns:
                 db.execute("ALTER TABLE podcast_feeds ADD COLUMN art_checked INTEGER NOT NULL DEFAULT 0")
@@ -371,9 +373,10 @@ class Library:
                     subscription=db.execute("SELECT id FROM podcast_feeds WHERE url=?",(podcast["feed"],)).fetchone()
                     if (subscription[0] if subscription else None)!=podcast.get("subscription"):
                         raise ValueError("Der Abostatus hat sich geändert. Bitte die Feedansicht aktualisieren.")
-                    db.execute("INSERT INTO podcast_items(feed,guid,book,show_title,published,creator) VALUES(?,?,?,?,?,?)",
-                               (podcast["feed"],podcast["guid"],book,podcast["show"],podcast.get("published"),podcast.get("creator")))
-                    if podcast.get("art"):
+                    db.execute("INSERT INTO podcast_items(feed,guid,book,show_title,published,creator,metadata) VALUES(?,?,?,?,?,?,?)",
+                               (podcast["feed"],podcast["guid"],book,podcast["show"],podcast.get("published"),
+                                podcast.get("creator"),json.dumps(podcast.get("metadata") or {})))
+                    if podcast.get("art") and subscription is None:
                         mime,image=podcast["art"]
                         db.execute("INSERT INTO book_covers VALUES(?,?,?)",(book,mime,image))
             file = db.execute("""INSERT INTO editions(id,book,folder,cover)
@@ -439,7 +442,8 @@ class Library:
                 if link_root:
                     links["tracks"]={f"track{i}{p.suffix.lower()}":linked_media.describe(link_root,p) for i,(p,_) in enumerate(tracks)}
                 fields=audio_epub(epub,tracks,str(body.get("title") or ""),str(body.get("author") or ""),linked=bool(link_root),
-                                  title_folder=str(body.get("title_folder") or "") if scan and kind=="audio" else "")
+                                  title_folder=str(body.get("title_folder") or "") if scan and kind=="audio" else "",
+                                  podcast=podcast)
             else:
                 raise ValueError("Diese Dateien passen nicht zur Rubrik.")
             if links:

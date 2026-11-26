@@ -1,7 +1,7 @@
 ## Deutsch
 
-Beim Mitlesen lassen sich Wort, Sinnabschnitt oder Satz markieren. Sinnabschnitte nutzen vorhandene Zeitmarken und Satzzeichen. Beim Vorlesen kann die Markierung Satzteile verfolgen, wenn die Browserstimme Wortgrenzen meldet.
+Alle Folgen eines abonnierten Podcasts zeigen das offizielle Sendungscover. Audilege ergänzt Folgeninformationen aus Audible, wenn Folge und Sendung eindeutig zusammenpassen. Beim Mitlesen wechselt die Markierung für Sinnabschnitte rund 400 Millisekunden früher.
 
 ## English
 
-Choose word, phrase, or sentence highlighting. Phrases use existing cue timing and punctuation. During read-aloud, phrase highlighting follows word boundaries when provided by the browser voice.
+All episodes of a subscribed podcast use the official show artwork. Audilege adds episode information from Audible when the episode and show match. During read-along playback, phrase highlighting advances about 400 milliseconds earlier.

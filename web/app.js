@@ -382,9 +382,19 @@ function renderText(){
   $("modeWrap").hidden=!hasTimedWords;
   highlight();
 }
-function highlight(){
+let highlightedCueIndex=-1;
+function markingCueIndex(){
+  let index=cueIndex;
+  if($("mode").value!=="phrase"||media.paused||pendingSeek!=null||!cues[index])return index;
+  const target=media.currentTime+.4;
+  while(index+1<cues.length&&cues[index+1].path===cues[index].path
+      &&cues[index+1].begin>=cues[index].begin&&cues[index+1].begin<=target)index++;
+  return index;
+}
+function highlight(index=markingCueIndex()){
+  highlightedCueIndex=index;
   for(const n of activeSpans)n.classList.remove("current");activeSpans=[];
-  const c=cues[cueIndex];if(!c){clearReadAlongPhrase();return;}
+  const c=cues[index];if(!c){clearReadAlongPhrase();return;}
   const word=anchorNodes.get(c.anchor);
   const sentenceCue=sentenceNodes.get(c.anchor);
   const target=word?.[0] || sentenceCue?.[0];if(!target){clearReadAlongPhrase();return;}
@@ -399,7 +409,7 @@ function highlight(){
 $("mode").value=localStorage.getItem("audilege-mark")||"word";
 $("mode").onchange=()=>{localStorage.setItem("audilege-mark",$("mode").value);highlight();};
 function setCue(i,offset=0,play=false){
-  cueIndex=i;const c=cues[i];if(!c)return;highlight();
+  cueIndex=i;const c=cues[i];if(!c)return;highlight(i);
   loadedChapter=chapter;
   const url="api/v1/epub/"+current.id+"/media-overlay/file/"+c.path.split("/").map(encodeURIComponent).join("/")+"?fileId="+publication.fileId;
   const t=c.begin+Math.max(0,Math.min(offset,c.end-c.begin));
@@ -447,7 +457,13 @@ function updateCue(){
   }
 }
 media.ontimeupdate=()=>{if(!media.paused&&!loading)dirty=true;updateCue();};
-function follow(){if(media.paused||!publication)return;updateCue();frame=requestAnimationFrame(follow);}
+function follow(){
+  if(media.paused||!publication)return;
+  updateCue();
+  const index=markingCueIndex();
+  if(index!==highlightedCueIndex)highlight(index);
+  frame=requestAnimationFrame(follow);
+}
 media.onplaying=()=>{if(!loading)segmentStart??=Date.now();cancelAnimationFrame(frame);frame=requestAnimationFrame(follow);};
 media.onwaiting=recordListening;
 media.onpause=()=>{recordListening();if(current)queueProgress();};

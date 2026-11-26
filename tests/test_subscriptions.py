@@ -5,11 +5,12 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 import wave
 
 import test_server
 from library import Library
-from podcasts import Subscriptions, channel_artwork, cleanup, import_episode, newest, preview
+from podcasts import Subscriptions, audible_podcast, cleanup, import_episode, newest, official_artwork, preview
 from server import catalog, podcast_subscriptions, revision, stats
 
 
@@ -119,19 +120,29 @@ class SubscriptionTest(unittest.TestCase):
         self.assertEqual(newest(entries,[("missing",7),("older-undated",None)]),
                          ["first","equal","missing","third","undated","older-undated"])
 
-    def test_youtube_logo_is_cached_and_retained_after_provider_failure(self):
+    def test_mirror_uses_one_official_cover_for_all_episodes(self):
         url="https://a.example/rss"
         video="https://www.youtube.com/watch?v=abc123DEF45"
-        image="https://yt3.ggpht.com/fixture"
+        image="https://is1-ssl.mzstatic.com/fixture"
         png=b"\x89PNG\r\n\x1a\nfixture"
-        rss=f'<rss><channel><title>Testsendung</title><item><link>{video}</link></item></channel></rss>'
+        rss=f"""<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"><channel>
+            <title>Testsendung (YouTube)</title><itunes:image href="https://a.example/mirror-art.jpg"/>
+            <item><guid>1</guid><title>Erste Folge</title><link>{video}</link><enclosure url="/1.wav" type="audio/wav"/>
+                  <itunes:image href="https://i.ytimg.com/vi/abc123DEF45/0.jpg"/></item>
+            <item><guid>2</guid><title>Zweite Folge</title><enclosure url="/2.wav" type="audio/wav"/></item>
+            </channel></rss>"""
         def public(source,hosts,limit):
-            if "/oembed?" in source:return json.dumps({"author_url":"https://youtube.com/@fixture"}).encode()
-            if source=="https://www.youtube.com/@fixture":
-                return f'<meta content="{image}" property="og:image">'.encode()
+            if source.startswith("https://api.audible.de/"):return b'{"products":[]}'
+            if source.startswith("https://itunes.apple.com/"):
+                return json.dumps({"results":[dict(collectionName="Testsendung",feedUrl="https://official.example/rss",
+                                                   artworkUrl600=image)]}).encode()
             self.assertEqual(source,image)
             return png
-        with patch("podcasts.fetch",side_effect=lambda _url:Response(rss.encode(),url)), \
+        def fetch(source):
+            if source==url:return Response(rss.encode(),url)
+            self.assertIn(source,{"https://a.example/1.wav","https://a.example/2.wav"})
+            return Response(self.audio,source,len(self.audio))
+        with patch("podcasts.fetch",side_effect=fetch), \
              patch("podcasts.public_artwork_request",side_effect=public) as request:
             self.worker.subscribe(url,1)
             self.sync(url)
@@ -139,6 +150,8 @@ class SubscriptionTest(unittest.TestCase):
             self.assertEqual(request.call_count,3)
             with self.lib.db() as db:
                 self.assertTrue(podcast_subscriptions(db)[0]["cover"])
+                self.assertEqual(db.execute("SELECT count(*) FROM book_covers").fetchone()[0],0)
+                self.assertTrue(all(book["cover"] for book in catalog(db,1)))
                 db.execute("UPDATE podcast_feeds SET art_checked=0")
             request.side_effect=OSError()
             self.sync(url)
@@ -151,12 +164,25 @@ class SubscriptionTest(unittest.TestCase):
                          "artistName":"Testredaktion","artworkUrl600":image}]}
         data=json.dumps(rows).encode()
         with patch("podcasts.public_artwork_request",return_value=data) as request:
-            self.assertEqual(channel_artwork("Testsendung","Andere Redaktion","https://other.example/rss",""),("",None))
+            self.assertEqual(official_artwork("Testsendung","Andere Redaktion","https://other.example/rss","",False),("",None))
             self.assertEqual(request.call_count,1)
         for title,author,feed in [("Testsendung","Testredaktion","https://local.example/rss"),
                                   ("Anderer Titel","Andere Redaktion","https://feeds.example/rss")]:
             with patch("podcasts.public_artwork_request",side_effect=[data,b"\xff\xd8\xfffixture"]):
-                self.assertEqual(channel_artwork(title,author,feed,""),(image,("image/jpeg",b"\xff\xd8\xfffixture")))
+                self.assertEqual(official_artwork(title,author,feed,"",False),(image,("image/jpeg",b"\xff\xd8\xfffixture")))
+
+    def test_audible_episode_metadata_requires_the_right_parent(self):
+        parent=dict(asin="parent",title="Testsendung",content_delivery_type="PodcastParent",
+                    product_images={"500":"https://m.media-amazon.com/fixture.jpg"})
+        episode=dict(asin="episode",title="Treffer – eine Folge",content_delivery_type="PodcastEpisode",
+                     publisher_summary="<p>Beschreibung von Audible</p>",release_date="2026-11-26",
+                     relationships=[dict(asin="parent",relationship_to_product="parent")])
+        other=episode|dict(asin="other",relationships=[dict(asin="unrelated",relationship_to_product="parent")])
+        result=json.dumps({"products":[parent,episode,other]}).encode()
+        with patch("podcasts.public_artwork_request",return_value=result):
+            image,metadata=audible_podcast("Testsendung (YouTube)",{"matched":"Treffer - eine Folge","unknown":"Andere Folge"})
+        self.assertEqual(image,parent["product_images"]["500"])
+        self.assertEqual(metadata,{"matched":{"audibleAsin":"episode","description":"Beschreibung von Audible","year":"2026"}})
 
     def test_shelf_lists_only_subscriptions_including_empty_feeds(self):
         a,b=self.feeds
@@ -173,3 +199,32 @@ class SubscriptionTest(unittest.TestCase):
             self.assertNotEqual(before,revision(db))
             db.execute("DELETE FROM podcast_feeds")
             self.assertEqual(podcast_subscriptions(db),[])
+
+
+class PodcastCoverTest(unittest.TestCase):
+    setUp=test_server.ServerTest.setUp
+    tearDown=test_server.ServerTest.tearDown
+    call=test_server.ServerTest.call
+
+    def test_existing_episode_uses_show_cover_on_web_and_android_routes(self):
+        url="https://example.invalid/rss"
+        png=b"\x89PNG\r\n\x1a\nshow"
+        with self.lib.db() as db:
+            for book in (1,2):
+                db.execute("INSERT INTO books(id,title,author,category,edition) VALUES(?,?,?,'podcast',?)",
+                           (book,f"Folge {book}","Testsendung",book))
+                folder=f"{book:032x}"
+                (self.lib.data/"editions"/folder).mkdir()
+                db.execute("INSERT INTO editions VALUES(?,?,?,NULL)",(book,book,folder))
+                db.execute("INSERT INTO podcast_items(feed,guid,book,show_title,metadata) VALUES(?,?,?,?,?)",
+                           (url,str(book),book,"Testsendung",'{"description":"Offizielle Folge"}'))
+                db.execute("INSERT INTO book_covers VALUES(?,?,?)",(book,"image/jpeg",b"old-thumbnail"))
+            feed=db.execute("INSERT INTO podcast_feeds(url,title,creator,owner) VALUES(?,?,?,?)",
+                            (url,"Testsendung","Testredaktion",1)).lastrowid
+        with self.assertRaises(HTTPError) as missing:self.call("/api/v1/books/1/thumbnail",raw=True)
+        self.assertEqual(missing.exception.code,404)
+        with self.lib.db() as db:
+            db.execute("INSERT INTO podcast_art VALUES(?,?,?,?)",(feed,"https://example.invalid/show.png","image/png",png))
+        for route in (f"/web/podcasts/{feed}/cover","/api/v1/books/1/thumbnail?size=360","/api/v1/books/2/cover?medium=audio&strict=true"):
+            self.assertEqual(self.call(route,raw=True)[2],png)
+        self.assertEqual(self.call("/api/v1/books/1")["metadata"]["description"],"Offizielle Folge")

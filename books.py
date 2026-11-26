@@ -219,7 +219,7 @@ def embedded_chapters(metadata, duration):
     return chapters
 
 
-def audio_epub(target, tracks, title, author, *, linked=False, title_folder=""):
+def audio_epub(target, tracks, title, author, *, linked=False, title_folder="", podcast=None):
     """Give the current Android reader seekable audio chapters in an EPUB media overlay."""
     items, spine, timings = [], [], []
     fields={}
@@ -235,7 +235,14 @@ def audio_epub(target, tracks, title, author, *, linked=False, title_folder=""):
                     title = audiobook_title(tags.get("album"), title_folder)
                 title=title or fields.pop("title","") or Path(label).stem
                 author=author or fields.pop("author","")
-                picture=track_picture(track,metadata)
+                if podcast is None:
+                    picture=track_picture(track,metadata)
+                else:
+                    picture=None
+                    if art:=podcast.get("art"):
+                        mime,image=art
+                        extension={"image/jpeg":"jpg","image/png":"png","image/webp":"webp"}[mime]
+                        picture=("cover."+extension,mime,image)
                 if picture:
                     cover,mime,image=picture
                     z.writestr(cover,image)
