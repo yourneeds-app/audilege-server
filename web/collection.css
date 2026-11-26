@@ -84,8 +84,8 @@ dialog.libraryReview {
 }
 .libraryReview .studioRows h3 { margin: 0 0 .5rem; }
 .libraryReview .studioRows p { margin: .5rem 0; }
-::highlight(voice){background-color:var(--word);color:var(--ink)}
-[data-emphasis=line] ::highlight(voice){background-color:transparent;text-decoration:underline;text-decoration-color:var(--accent)}
+::highlight(audilege-phrase),::highlight(voice){background-color:var(--word);color:var(--ink)}
+[data-emphasis=line] ::highlight(audilege-phrase),[data-emphasis=line] ::highlight(voice){background-color:transparent;text-decoration:underline;text-decoration-color:var(--accent)}
 @media(max-width:760px){.globalTools{margin-left:2.9rem;margin-top:-3.3rem;min-height:3.2rem}.homeShelf{display:flex;overflow:auto;gap:.8rem;padding:.25rem}.homeShelf .book{flex:0 0 min(29vw,9rem)}}
 #miniPlayer:not([hidden]) {
   position:fixed;z-index:6;bottom:max(.8rem,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);

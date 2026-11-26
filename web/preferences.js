@@ -111,7 +111,7 @@ preference(readingPrefs,"size",tr("Schriftgröße"),[["1",tr("Klein")],["1.15",t
 preference(readingPrefs,"leading",tr("Zeilenabstand"),[["1.45",tr("Eng")],["1.7","Normal"],["1.95",tr("Weit")]],"1.7",v=>cssVar("--book-leading",v));
 preference(readingPrefs,"margin",tr("Seitenrand"),[["1",tr("Schmal")],["1.5",tr("Mittel")],["2.25",tr("Breit")]],"1.5",v=>cssVar("--book-margin",v+"rem"));
 preference(readingPrefs,"flow",tr("Lesedarstellung"),[["page",tr("Blättern")],["scroll",tr("Scrollen")]],"page",v=>document.documentElement.dataset.flow=v);
-const markPref=preference(readingPrefs,"mark",tr("Markierung"),[["word",tr("Wort")],["sentence",tr("Satz")]],$("mode").value,v=>{$("mode").value=v;localStorage.setItem("audilege-mark",v);if(publication)highlight();});
+const markPref=preference(readingPrefs,"mark",tr("Markierung"),[["word",tr("Wort")],["phrase",tr("Sinnabschnitt")],["sentence",tr("Satz")]],$("mode").value,v=>{$("mode").value=v;localStorage.setItem("audilege-mark",v);if(publication)highlight();});
 $("mode").addEventListener("change",()=>{markPref.value=$("mode").value;localStorage.setItem("audilege-pref-mark",markPref.value);});
 const jumps=["5","10","15","30","60"].map(n=>[n,n+" s"]);
 function skipPref(key,label,button,direction){

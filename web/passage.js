@@ -4,7 +4,7 @@
 const passageCache = new WeakMap();
 const blockTags = new Set("p div section article blockquote h1 h2 h3 h4 h5 h6 ul ol li pre hr br".split(" "));
 const inlineTags = new Set("em strong b i sup sub small ruby rt".split(" "));
-let pageRuns = [], currentPassage = null;
+let pageRuns = [], currentPassage = null, spokenPassage = null;
 
 function chapterModel(xml, path) {
   const doc = new DOMParser().parseFromString(xml,"application/xml");
@@ -88,7 +88,14 @@ function cueAtOffset(offset) {
 }
 function renderPassage(root,model,paged) {
   const live=[];
-  if(!paged){anchorNodes=new Map();sentenceNodes=new Map();activeSpans=[];}
+  if(!paged){
+    anchorNodes=new Map();sentenceNodes=new Map();activeSpans=[];
+    spokenPassage={model,runs:live,groups:new Map(),timed:cues,pauses:[],marked:null,lastSentence:null};
+    for(let i=1;i<cues.length;i++){
+      const a=cues[i-1],b=cues[i],at=model.anchors.get(b.anchor);
+      if(a.path===b.path&&b.begin-a.end>=.1999&&at!=null)spokenPassage.pauses.push(at);
+    }
+  }
   function build(item) {
     if(item.text===undefined) {
       const node=document.createElement(item.tag);
@@ -96,6 +103,11 @@ function renderPassage(root,model,paged) {
       return node;
     }
     const node=document.createTextNode(item.text);live.push({start:item.start,node});
+    if(!paged&&item.sentence){
+      const group=spokenPassage.groups.get(item.sentence);
+      const end=item.start+item.text.length;
+      if(group)group.end=end;else spokenPassage.groups.set(item.sentence,{start:item.start,end});
+    }
     if(paged || (!item.anchor&&!item.sentence))return node;
     const span=document.createElement("span");span.append(node);
     span.dataset.anchor=item.anchor;span.dataset.sentence=item.sentence;
@@ -124,6 +136,45 @@ function renderPassage(root,model,paged) {
     }
     highlight();
   }
+}
+function makePassageRange(runs,from,to){
+  const a=passageRun(runs,from),b=passageRun(runs,to);
+  if(!a||!b||from>=to)return null;
+  const range=new Range();
+  range.setStart(a.node,Math.min(a.node.length,from-a.start));
+  range.setEnd(b.node,Math.min(b.node.length,to-b.start));
+  return range;
+}
+function markReadAlongPhrase(anchor){
+  const state=spokenPassage;
+  if(!globalThis.CSS?.highlights||!globalThis.Highlight||!state||state.model!==currentPassage
+      ||state.timed!==cues||sentenceNodes.has(anchor))return false;
+  const text=state.model.content;
+  let at=state.model.anchors.get(anchor);
+  const source=anchorNodes.get(anchor)?.[0]?.dataset.sentence;
+  if(at==null)return false;
+  while(at<text.length&&/\s/u.test(text[at]))at++;
+  let bounds=state.groups.get(source);
+  if(!bounds){
+    bounds=state.lastSentence;
+    if(!bounds||at<bounds.start||at>=bounds.end){
+      if(!globalThis.Intl?.Segmenter)return false;
+      state.segmenter??=new Intl.Segmenter(publication.language||uiLanguage,{granularity:"sentence"}).segment(text);
+      const part=state.segmenter.containing(at);
+      if(!part)return false;
+      state.lastSentence=bounds={start:part.index,end:part.index+part.segment.length};
+    }
+  }
+  const [from,to]=audilegePhraseBounds(text,bounds.start,bounds.end,at,state.pauses);
+  if(state.marked?.[0]===from&&state.marked?.[1]===to)return true;
+  const range=makePassageRange(state.runs,from,to);
+  if(!range)return false;
+  CSS.highlights.set("audilege-phrase",new Highlight(range));
+  state.marked=[from,to];return true;
+}
+function clearReadAlongPhrase(){
+  globalThis.CSS?.highlights?.delete("audilege-phrase");
+  if(spokenPassage)spokenPassage.marked=null;
 }
 async function layoutPassage(offset) {
   const pub=publication,index=chapter,mode=readerMode;

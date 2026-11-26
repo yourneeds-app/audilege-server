@@ -242,7 +242,7 @@ def stats(db,owner):
 
 @lru_cache(maxsize=1)
 def browser_bundle():
-    scripts = ('locale.js', 'app.js', 'reading.js', 'workspace.js', 'passage.js', 'dashboard.js', 'preferences.js', 'collection.js', 'controls.js', 'studio.js')
+    scripts = ('locale.js', 'app.js', 'reading.js', 'workspace.js', 'reader-phrases.js', 'passage.js', 'dashboard.js', 'preferences.js', 'collection.js', 'controls.js', 'studio.js')
     return b"\n;\n".join((ROOT/"web"/name).read_bytes() for name in scripts)
 
 

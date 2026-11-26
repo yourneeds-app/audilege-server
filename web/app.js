@@ -360,7 +360,7 @@ async function closeReader(){
   resetReadingTools();
   resetDock();finishReadSession();
   recordListening();media.pause();const saved=queueProgress();generation++;publication=null;current=null;loadedAudio="";loadedChapter=-1;pendingSeek=null;
-  media.removeAttribute("src");media.load();activeSpans=[];loading=false;
+  media.removeAttribute("src");media.load();activeSpans=[];clearReadAlongPhrase();loading=false;
   updateMiniPlayer();
   await saved;
 }
@@ -384,12 +384,15 @@ function renderText(){
 }
 function highlight(){
   for(const n of activeSpans)n.classList.remove("current");activeSpans=[];
-  const c=cues[cueIndex];if(!c)return;
+  const c=cues[cueIndex];if(!c){clearReadAlongPhrase();return;}
   const word=anchorNodes.get(c.anchor);
   const sentenceCue=sentenceNodes.get(c.anchor);
-  const target=word?.[0] || sentenceCue?.[0];if(!target)return;
+  const target=word?.[0] || sentenceCue?.[0];if(!target){clearReadAlongPhrase();return;}
+  const unit=$("mode").value;
+  const phrase=unit==="phrase"&&markReadAlongPhrase(c.anchor);
+  if(!phrase)clearReadAlongPhrase();
   const sentenceGroup=sentenceNodes.get(target.dataset.sentence);
-  activeSpans=sentenceCue || ($("mode").value==="sentence" && sentenceGroup) || word;
+  activeSpans=phrase?[]:sentenceCue || ((unit==="sentence"||unit==="phrase") && sentenceGroup) || word || [];
   for(const n of activeSpans)n.classList.add("current");
   if(playerVisible()&&readerMode==="along"&&!media.paused&&followPassage){const r=target.getBoundingClientRect();if(r.top<100||r.bottom>innerHeight-80)target.scrollIntoView({block:"center",behavior:"instant"});}
 }

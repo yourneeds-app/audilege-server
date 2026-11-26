@@ -140,3 +140,5 @@ Object.assign(strings,{
   "Aktivität pro Titel":"Activity by title","Wähle einen Balken, um den Zeitraum einzugrenzen.":"Select a bar to narrow down the period.",
   "Keine jüngeren Sitzungen in diesem Zeitraum.":"No recent sessions in this period.","Aktivitätskalender":"Activity calendar"
 });
+
+strings["Sinnabschnitt"]="Phrase";

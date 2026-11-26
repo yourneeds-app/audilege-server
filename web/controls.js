@@ -152,14 +152,26 @@ function speakPassage(){
     function utter(i){
       if(epoch!==speechEpoch||model!==currentPassage||!sentences[i])return;
       const [at,text]=sentences[i],u=new SpeechSynthesisUtterance(text);u.lang=lang;
+      let marked=null;
       function mark(pos,len){
+        const end=Math.min(model.content.length,pos+len);
+        if(marked?.[0]===pos&&marked?.[1]===end)return;
+        marked=[pos,end];
         positionPage(pos);
         if(!window.CSS?.highlights)return;
-        const a=passageRun(pageRuns,pos),end=Math.min(model.content.length,pos+len),b=passageRun(pageRuns,end);
-        if(!a||!b)return;const r=new Range();r.setStart(a.node,Math.min(a.node.length,pos-a.start));r.setEnd(b.node,Math.min(b.node.length,end-b.start));CSS.highlights.set("voice",new Highlight(r));
+        const range=makePassageRange(pageRuns,pos,end);
+        if(range)CSS.highlights.set("voice",new Highlight(range));
       }
       u.onstart=()=>{finishReadSession();startReadSession("tts");mark(base+at,text.length);};
-      u.onboundary=e=>{if(epoch===speechEpoch&&e.name==="word"&&$("mode").value==="word")mark(base+at+e.charIndex,e.charLength||text.slice(e.charIndex).match(/^\S+/)?.[0].length||1);};
+      u.onboundary=e=>{
+        if(epoch!==speechEpoch||e.name!=="word")return;
+        const unit=$("mode").value;
+        if(unit==="word")mark(base+at+e.charIndex,e.charLength||text.slice(e.charIndex).match(/^\S+/)?.[0].length||1);
+        if(unit==="phrase"){
+          const [from,to]=audilegePhraseBounds(text,0,text.length,e.charIndex);
+          mark(base+at+from,to-from);
+        }
+      };
       u.onend=()=>{if(epoch!==speechEpoch)return;dirty=true;queueProgress();if(i+1<sentences.length)utter(i+1);else{window.CSS?.highlights?.delete("voice");finishReadSession();startReadSession("read");}};
       speechSynthesis.speak(u);
     }utter(0);

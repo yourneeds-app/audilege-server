@@ -1,7 +1,7 @@
 ## Deutsch
 
-Filterbare Aktivitätsstatistik mit Zeiträumen, auswählbaren Balken und Zeit pro Titel. Neuladen und Browser-Zurück behalten die Audilege-Navigation. Android kann Statistik und ausstehende Sitzungen in einem Abgleich übertragen.
+Beim Mitlesen lassen sich Wort, Sinnabschnitt oder Satz markieren. Sinnabschnitte nutzen vorhandene Zeitmarken und Satzzeichen. Beim Vorlesen kann die Markierung Satzteile verfolgen, wenn die Browserstimme Wortgrenzen meldet.
 
 ## English
 
-Filter activity by type and period, select chart bars, and inspect time by title. Reload and browser Back respect Audilege navigation. Android can sync queued sessions with its statistics in one request.
+Choose word, phrase, or sentence highlighting. Phrases use existing cue timing and punctuation. During read-aloud, phrase highlighting follows word boundaries when provided by the browser voice.
