@@ -29,7 +29,7 @@ from library import AUDIO, Library, ROOT, TYPES, get_progress, save_progress
 from metadata import SOURCES, fetch_cover, image_type, search
 from podcasts import Subscriptions, import_episode, preview
 from scanner import Inbox, folder_series, shelf_location
-from media_tools import audiobook_title
+from media_tools import audiobook_title, display_audiobook_title
 import curation
 import linked_media
 from activity import merged
@@ -93,6 +93,8 @@ def catalog(db,owner,book_id=None,start=False,storage_roots=None,show_editions=F
             folder = Path(b["storage_source"]).name
             if b["title"].casefold() == folder.casefold():
                 out[-1]["title"] = audiobook_title(out[-1]["metadata"].get("title"), b["title"])
+        if b["category"] in ("audio","audilege"):
+            out[-1]["title"] = display_audiobook_title(out[-1]["title"])
         if storage_roots is not None:
             origin = shelf_location(b["storage_source"], storage_roots)
             out[-1]["storage"] = shelf_location(b["export_path"], storage_roots) if b["export_path"] else origin
@@ -734,7 +736,7 @@ class Handler(BaseHTTPRequestHandler):
                         if subscription is not None:
                             if not subscription["mime"]:raise KeyError("Kein Sendungscover vorhanden.")
                             return self.artwork(subscription["image"],subscription["mime"],small)
-                    variant=param("art") or ("audio" if cover_book["category"] in ("audio","podcast") else "book")
+                    variant=param("art") or param("medium") or ("audio" if cover_book["category"] in ("audio","podcast") else "book")
                     versioned=param("rev")==f'{edition["id"]}-{cover_book["cover_revision"]}'
                     override=db.execute("SELECT mime,image FROM role_covers WHERE book=? AND role=?",(book,variant)).fetchone()
                     if override:
@@ -749,6 +751,8 @@ class Handler(BaseHTTPRequestHandler):
                             WHERE (b.id=? OR b.merged_into=?) AND e.cover IN ('cover.jpg','cover.png','cover.webp') ORDER BY e.id DESC""",(book,book)):
                             source=source_audio_art(self.lib.data/"editions"/prev[0])
                             if source:return self.artwork(source[1],mimetypes.guess_type(source[0])[0],small,versioned)
+                        if param("strict")=="true" and cover_book["category"] not in ("audio","podcast"):
+                            raise KeyError("Kein Hörbuchcover vorhanden.")
                     custom=db.execute("SELECT mime,image FROM book_covers WHERE book=?",(book,)).fetchone()
                     if custom:
                         return self.artwork(custom["image"],custom["mime"],small,versioned)

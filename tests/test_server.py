@@ -192,6 +192,11 @@ class ServerTest(unittest.TestCase):
         audio_art=(Path(__file__).resolve().parents[1]/"web/audilege.webp").read_bytes()
         with self.lib.db() as db:
             db.executemany("INSERT INTO role_covers VALUES(?,?,?,?)",[(book,"book","image/webp",book_art),(audio,"audio","image/webp",audio_art)])
+            db.execute("UPDATE books SET title=? WHERE id=?",("Vol 14 - Fiktiver Titel (Ein Beispiel-Krimi 14)",audio))
+        self.assertEqual(self.call(f"/api/v1/books/{audio}")["title"],"Fiktiver Titel")
+        with self.assertRaises(HTTPError) as no_audio:
+            self.call(f"/api/v1/books/{book}/cover?medium=audio&strict=true",raw=True)
+        self.assertEqual(no_audio.exception.code,404)
         podcast=add("podcast","P.wav",wav.getvalue())
         self.call("/web/align",{"book":book,"companion":audio,"files":[],"language":"de"})
         with self.assertRaises(HTTPError):
@@ -206,8 +211,10 @@ class ServerTest(unittest.TestCase):
         def art(role):
             return self.call(f"/api/v1/books/{book}/cover?art={role}",raw=True)[2]
         self.assertEqual((art("book"),art("audio")),(book_art,audio_art))
+        self.assertEqual(self.call(f"/api/v1/books/{book}/cover?medium=audio&strict=true",raw=True)[2],audio_art)
         self.call(f"/web/admin/metadata/{book}",{"title":"Fiktiver Titel","resetRole":"audio"})
         self.assertEqual((art("book"),art("audio")),(book_art,png))
+        self.assertEqual(self.call(f"/api/v1/books/{book}/cover?medium=audio&strict=true",raw=True)[2],png)
         import maintenance
         with self.lib.db() as db:maintenance.retention(self.lib,db,{"job":1,"action":"trash","confirmed":True})
         self.assertEqual((art("book"),art("audio")),(book_art,png))

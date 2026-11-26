@@ -51,13 +51,27 @@ def ffprobe(path):
     return json.loads(r.stdout)
 
 
+_VOLUME_PREFIX = re.compile(r"^(?:vol(?:ume)?|band)\.?\s*(\d+(?:[.,]\d+)?)\s*[-–—]\s*", re.I)
+
+
+def display_audiobook_title(value):
+    title=value.strip()
+    prefix=_VOLUME_PREFIX.match(title)
+    if not prefix:return title
+    title=title[prefix.end():].strip()
+    # Some directory names repeat the volume in a parenthetical series credit.
+    # Keep subtitles and parenthetical edition names that do not match it.
+    suffix=re.search(r"\s+\((?:ein|eine)\s+[^()]+?\s+(\d+)\)$",title,re.I)
+    volume=prefix[1]
+    if suffix and volume.isdigit() and int(suffix[1])==int(volume):
+        title=title[:suffix.start()]
+    return title
+
+
 def audiobook_title(album, folder_title):
     """Prefer a book-level tag, with the folder as a fallback for old truncated tags."""
-    def without_volume(value):
-        return re.sub(r"^(?:vol(?:ume)?|band)\.?\s*\d+(?:[.,]\d+)?\s*[-–—]\s*", "", value, flags=re.I).strip()
-
-    folder_title = without_volume(folder_title)
-    album = without_volume(album or "")
+    folder_title = display_audiobook_title(folder_title)
+    album = display_audiobook_title(album or "")
     if not album or re.fullmatch(r"(?:chapter|kapitel|track)\s*\d+", album, re.I):
         return folder_title
     # ID3v1 stores 30 bytes per title. Some tools retain that truncated text in newer tags.

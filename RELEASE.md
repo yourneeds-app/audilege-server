@@ -1,7 +1,7 @@
 ## Deutsch
 
-Alle Folgen eines abonnierten Podcasts zeigen das offizielle Sendungscover. Audilege ergänzt Folgeninformationen aus Audible, wenn Folge und Sendung eindeutig zusammenpassen. Beim Mitlesen wechselt die Markierung für Sinnabschnitte rund 400 Millisekunden früher.
+Die Android-App erhält beim Hören das Hörbuchcover einer Mitlesefassung. Katalog und Startseite zeigen bereinigte Titel für ältere Einträge mit Bandpräfix und wiederholtem Reihenhinweis.
 
 ## English
 
-All episodes of a subscribed podcast use the official show artwork. Audilege adds episode information from Audible when the episode and show match. During read-along playback, phrase highlighting advances about 400 milliseconds earlier.
+Android can retrieve the audiobook cover of a read-along edition while listening. The catalog and home screen clean up legacy titles with a volume prefix and a repeated series credit.
