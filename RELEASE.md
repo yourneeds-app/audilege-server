@@ -1,7 +1,7 @@
 ## Deutsch
 
-Android kann vom reinen Hörbuch direkt zur bereits vorhandenen Mitlesefassung wechseln. Der Server meldet dazu eine verknüpfte oder eindeutig passende Mitlesefassung.
+Gehörte Podcastfolgen zeigen einen Haken. „Podcast A–Z“ ordnet Folgen nach der Sendung. „Serie fortsetzen“ zeigt auf der Startseite den laufenden oder nächsten Band mit gestapelten Covern.
 
 ## English
 
-Android can switch from the audiobook to its existing read-along edition. The server returns a linked or uniquely matching read-along edition.
+Completed podcast episodes show a check mark. Podcast A–Z sorts episodes by show. Continue series on Home shows the current or next volume with stacked covers.

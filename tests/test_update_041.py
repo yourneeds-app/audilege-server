@@ -174,7 +174,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn('method="post" action="web/login"',html)
         self.assertNotRegex(html,r'(src|href)="/')
         self.assertEqual(html.count("<script"),1)
-        bundle=self.call("/audilege-ui.js?v=0.4.27",raw=True)[2]
+        bundle=self.call("/audilege-ui.js?v=0.4.28",raw=True)[2]
         self.assertLess(bundle.index(b"function tr("),bundle.index(b"const categories ="))
         credentials={"username":"eins","password":"test-fixture-1","cookiePath":"/medien/audilege/"}
         origin={"Origin":"https://school.example","Host":"school.example"}

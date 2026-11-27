@@ -65,8 +65,11 @@ function volumeOrder(left,right){
 function compareBooks(a,b){
   const order=$("shelfSort").value,title=byName.compare(a.title,b.title);
   if(order==="az"||order==="za")return order==="az"?title:-title;
-  if(order==="author"||order==="authorDesc")
-    return compareOptional(creditedAuthors(a)[0],creditedAuthors(b)[0],order==="author"?1:-1)||title;
+  if(order==="author"||order==="authorDesc"){
+    const author=b=>b.category==="podcast"?(b.podcast?.show||creditedAuthors(b)[0]):creditedAuthors(b)[0];
+    return compareOptional(author(a),author(b),order==="author"?1:-1)
+      ||(a.category==="podcast"&&b.category==="podcast"?(b.podcast?.published??0)-(a.podcast?.published??0):0)||title;
+  }
   if(order==="series"||order==="seriesDesc"){
     const left=String(a.metadata?.series||"").trim(),right=String(b.metadata?.series||"").trim();
     return compareOptional(left,right,order==="series"?1:-1)

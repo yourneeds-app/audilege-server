@@ -1,4 +1,4 @@
-# Audilege Server 0.4.27
+# Audilege Server 0.4.28
 
 Abgleichaufträge zeigen den gemessenen Fortschritt je Phase. Unter Linux nach dem Update `sh worker/install.sh` im neuen Serverordner ausführen, damit der installierte Worker die Fortschrittswerte meldet.
 

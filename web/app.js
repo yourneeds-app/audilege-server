@@ -122,17 +122,19 @@ function renderShelf(){
   }
   if(!shelf.children.length)shelf.append(el("p",tr("Keine passenden Titel gefunden."),"empty"));
 }
+function completedArtwork(book){
+  const artwork=el("span",null,"shelfArtwork");artwork.append(cover(book));
+  if(book.played||book.readingProgress>=100){
+    const check=el("span","✓","shelfCompleted");
+    check.setAttribute("role","img");check.setAttribute("aria-label",tr(book.category==="podcast"?"Gehört":"Abgeschlossen"));
+    artwork.append(check);
+  }
+  return artwork;
+}
 function bookTile(book){
   const tile=el("article",null,"book");
   const button=action("",()=>openReader(book),"bookOpen");
-  const artwork=el("span",null,"shelfArtwork");
-  artwork.append(cover(book));
-  if(book.category!=="podcast"&&(book.played||book.readingProgress>=100)){
-    const check=el("span","✓","shelfCompleted");
-    check.setAttribute("role","img");check.setAttribute("aria-label",tr("Abgeschlossen"));
-    artwork.append(check);
-  }
-  button.append(artwork,el("strong",book.title));
+  button.append(completedArtwork(book),el("strong",book.title));
   tile.append(button);
   appendAuthorLinks(tile,book);
   if($("showSeries").checked&&book.metadata?.series){
@@ -308,7 +310,7 @@ function retryPositions(){
   return saveQueue;
 }
 window.addEventListener("online",retryPositions);
-function queueProgress(){
+function queueProgress(completedPodcast=false){
   if(!publication||!dirty||loading)return saveQueue;
   const fileId=publication.fileId,gen=generation,sec=section(),c=isPaged()?null:cues[cueIndex];
   const elapsed=c?offsetOf(cueIndex)+within():0;
@@ -322,6 +324,7 @@ function queueProgress(){
     entry.text={page:chapter+1,webOffset:pageOffset,cfi:cfiAt(pageOffset)};
     entry.percentage=100*(chapter+pageOffset/Math.max(1,pageContent.length))/publication.sections.length;
   }
+  if(completedPodcast===true&&current?.category==="podcast"&&c)entry.percentage=100;
   const key=resumePrefix()+fileId+":"+resumeTab;
   entry.editedAt=position?.updatedAt||"1970-01-01T00:00:00.000Z";
   localStorage.setItem(key,JSON.stringify({title:current.title,base:entry.editedAt,entry}));
@@ -429,10 +432,12 @@ function setChapter(i){
   if(!cues.length){media.pause();media.removeAttribute("src");media.load();loadedAudio="";}
 }
 function nextSection(play){
-  if(stopAtChapter){stopAtChapter=false;media.pause();dirty=true;queueProgress();return;}
-  if(chapter+1>=publication.sections.length){media.pause();dirty=true;queueProgress();if(play)advanceQueue().catch(hint);return;}
   let i=chapter+1;while(i<publication.sections.length&&!publication.sections[i].cues.length)i++;
-  if(i===publication.sections.length){media.pause();dirty=true;queueProgress();return;}
+  if(stopAtChapter||i===publication.sections.length){
+    const advance=play&&!stopAtChapter&&chapter+1>=publication.sections.length;
+    stopAtChapter=false;media.pause();dirty=true;queueProgress(play&&i===publication.sections.length);
+    if(advance)advanceQueue().catch(hint);return;
+  }
   setChapter(i);if(cues.length)setCue(0,0,play);dirty=true;
 }
 function updateCue(){

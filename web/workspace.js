@@ -272,7 +272,7 @@ function podcastShelf(shelf,items,term){
   for(const b of (allEpisodes?newest:newest.slice(0,10))){
     const row=el("button",null,"episodeRow"),text=el("span");
     text.append(el("strong",b.title),el("small",title(b)));
-    row.append(cover(b),text);
+    row.append(completedArtwork(b),text);
     if(b.podcast?.published!=null){const d=new Date(b.podcast.published*1000),tag=el("time",d.toLocaleDateString(uiLanguage,{day:"numeric",month:"short",year:"numeric"}));tag.dateTime=d.toISOString();row.append(tag);}
     row.onclick=()=>openReader(b).catch(hint);feed.append(row);
   }

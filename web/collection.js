@@ -81,12 +81,51 @@ function groupsInto(box,field,groups,limit=Infinity){
   for(const [value,items] of [...groups].sort((a,b)=>byName.compare(a[0],b[0])).slice(0,limit)){
     const b=action("",()=>catalogPage(field,value));b.append(el("strong",value),el("small",String(items.length)));
     if(field==="series"){
-      const representative=items.filter(item=>item.cover).sort((a,b)=>volumeOrder(a.metadata?.volume,b.metadata?.volume))[0];
-      if(representative)b.prepend(cover(representative));
-      else b.prepend(el("span","▤","seriesPlaceholder"));
+      b.prepend(seriesCovers(seriesVolumes(items)));
     }
     options.append(b);
   }
+}
+function seriesVolumes(items){
+  const volumes=new Map(),finished=b=>b.played||b.readingProgress>=100;
+  for(const book of items){
+    const volume=String(book.metadata?.volume??"").trim().replace(",",".");
+    const key=volume&&Number.isFinite(Number(volume))?Number(volume):book.title.toLocaleLowerCase();
+    const previous=volumes.get(key);
+    if(!previous||Number(finished(book))>Number(finished(previous))
+        ||(finished(book)===finished(previous)&&book.readingProgress>previous.readingProgress))volumes.set(key,book);
+  }
+  return [...volumes.values()].sort((a,b)=>volumeOrder(a.metadata?.volume,b.metadata?.volume)||byName.compare(a.title,b.title));
+}
+function seriesCovers(items,lead){
+  const stack=el("span",null,"seriesStack");stack.setAttribute("aria-hidden","true");
+  const visible=[...new Set([lead,...items].filter(Boolean))].slice(0,3);
+  for(const [index,book] of visible.entries()) {
+    const art=cover(book);
+    art.style.setProperty("--stack-offset",index);
+    stack.prepend(art);
+  }
+  return stack;
+}
+function continueSeries(box){
+  const rows=[];
+  for(const [name,items] of collect("series")){
+    const volumes=seriesVolumes(items);
+    const current=volumes.find(b=>!b.played&&b.readingProgress>0&&b.readingProgress<100);
+    const completed=volumes.findLastIndex(b=>b.played||b.readingProgress>=100);
+    const next=current||(completed>=0?volumes[completed+1]:null);
+    if(next)rows.push({name,volumes,next});
+  }
+  if(!rows.length)return;
+  const section=el("section",null,"homeSeries");
+  sectionHead(section,tr("Serie fortsetzen"),()=>catalogPage("series"));
+  const grid=el("div",null,"seriesList");section.append(grid);
+  for(const row of rows.sort((a,b)=>byName.compare(a.name,b.name)).slice(0,6)){
+    const button=action("",()=>openReader(row.next,true));
+    const text=el("span");text.append(el("strong",row.name),el("small",row.next.title));
+    button.append(seriesCovers(row.volumes,row.next),text);grid.append(button);
+  }
+  box.append(section);
 }
 function globalResults(box,term){
   const tokens=fold(term).trim().split(/\s+/),matches=(...parts)=>tokens.every(t=>fold(parts.join(" ")).includes(t));
@@ -135,6 +174,7 @@ function renderStart(box){
       card.append(art,info);box.lastElementChild.append(card);
     }
   }
+  continueSeries(box);
   const newest=groupEditions(books).filter(b=>b.category!=="podcast").sort((a,b)=>(b.addedAt||"").localeCompare(a.addedAt||"")||b.id-a.id).slice(0,3);
   const columns=el("div",null,"homeColumns");
   if(newest.length){
@@ -156,6 +196,9 @@ function renderCollection(){
   if ($("globalTools").hidden) $("bookSearch").value="";
   const term=$("bookSearch").value.trim(),box=$("books");
   const sortKey="audilege-sort:"+[shelfPage,category,podcastFilter,facetValue,Boolean(term),discovering].join("/");
+  const podcast=category==="podcast";
+  $("shelfSort").querySelector('[value="author"]').textContent=tr(podcast?"Podcast A–Z":"Autor A–Z");
+  $("shelfSort").querySelector('[value="authorDesc"]').textContent=tr(podcast?"Podcast Z–A":"Autor Z–A");
   if($("shelfSort").dataset.key!==sortKey){$("shelfSort").dataset.key=sortKey;$("shelfSort").value=localStorage.getItem(sortKey)||(shelfPage==="series"&&facetValue?"series":localStorage.getItem("audilege-sort"))||"new";}
   $("shelfSort").onchange=()=>{localStorage.setItem(sortKey,$("shelfSort").value);renderShelf();};
   const custom=term||shelfPage==="start"||shelfPage in facets||discovering;

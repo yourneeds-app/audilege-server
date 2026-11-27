@@ -142,3 +142,4 @@ Object.assign(strings,{
 });
 
 strings["Sinnabschnitt"]="Phrase";
+Object.assign(strings,{"Serie fortsetzen":"Continue series","Gehört":"Played","Podcast A–Z":"Podcast A–Z","Podcast Z–A":"Podcast Z–A"});
