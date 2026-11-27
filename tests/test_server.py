@@ -16,6 +16,7 @@ from zipfile import ZipFile
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from abs_history import fetch_history
+from books import normalize_epub_xml
 from library import Library
 from server import Handler, ThreadingHTTPServer
 
@@ -36,6 +37,14 @@ def epub(audio=False):
 
 
 class StreamTest(unittest.TestCase):
+    def test_legacy_entities_preserve_cdata_comments_and_original_encoding(self):
+        source="<r><!-- &nbsp; --><![CDATA[&nbsp;]]>&nbsp;&ndash;&amp;&unknown;</r>"
+        encoded=b"\xfe\xff"+source.encode("utf-16-be")
+        repaired=normalize_epub_xml(encoded)
+        self.assertTrue(repaired.startswith(b"\xfe\xff"))
+        self.assertEqual(repaired[2:].decode("utf-16-be"),
+                         "<r><!-- &nbsp; --><![CDATA[&nbsp;]]>&#160;&#8211;&amp;&unknown;</r>")
+
     def test_socket_timeout_closes_stream_without_second_response(self):
         for fail_at_headers in (False,True):
             with self.subTest(fail_at_headers=fail_at_headers):
@@ -84,6 +93,29 @@ class ServerTest(unittest.TestCase):
 
     def upload(self,content,name):
         return self.call("/web/uploads?name="+quote(name),content)["upload"]
+
+    def test_legacy_xhtml_is_indexed_streamed_and_downloaded_for_linked_epubs(self):
+        chapter=(b'<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" '
+                 b'"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><html><body><h1>Fiktives Kapitel</h1>'
+                 b'<p>Text&nbsp;&ndash; Ende</p></body></html>')
+        root=Path(self.temp.name).resolve()
+        source=root/"legacy.epub"
+        with ZipFile(io.BytesIO(epub())) as standard, ZipFile(source,"w") as legacy:
+            for item in standard.infolist():
+                legacy.writestr(item,chapter if item.filename=="a.xhtml" else standard.read(item))
+        original=source.read_bytes()
+        book=self.lib.import_tracks([(source,source.name)],{"category":"ebook"},link_root=root)
+        indexed=self.call(f"/web/editions/{book}")
+        self.assertEqual(indexed["sections"][0]["lines"],["Fiktives Kapitel","Text – Ende"])
+        file=indexed["fileId"]
+        repaired=self.call(f"/api/v1/epub/{book}/file/a.xhtml?fileId={file}",raw=True)[2]
+        self.assertIn(b"Text&#160;&#8211; Ende",repaired)
+        self.assertNotIn(b"<!DOCTYPE",repaired)
+        payload=self.call(f"/api/v1/books/files/{file}/download",raw=True)[2]
+        with ZipFile(io.BytesIO(payload)) as downloaded:
+            self.assertIsNone(downloaded.testzip())
+            self.assertEqual(downloaded.read("a.xhtml"),repaired)
+        self.assertEqual(source.read_bytes(),original)
 
     def test_reader_protocol_ranges_and_conflict(self):
         b=self.call("/web/books",{"files":[self.upload(epub(True),"test.epub")],"category":"ebook"})["id"]

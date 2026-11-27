@@ -1,5 +1,6 @@
 """Index EPUB spine, cover and SMIL cues and serve individual resources without unzipping to client paths."""
 import hashlib
+from html.entities import html5
 import linked_media
 import json
 import math
@@ -36,11 +37,48 @@ def resource(folder, name):
     return folder / hashlib.sha256(name.encode()).hexdigest()
 
 
+_LEGACY_XHTML = (rb"""<!DOCTYPE\s+html\s+PUBLIC\s+["']-//W3C//DTD XHTML 1\.[01]"""
+                 rb"""(?: (?:Strict|Transitional|Frameset))?//EN["']\s+["']"""
+                 rb"""https?://www\.w3\.org/TR/xhtml(?:1|11)/DTD/xhtml(?:11|1-(?:strict|transitional|frameset))\.dtd["']\s*>""")
+_XML_TOKENS = (rb"<!--.*?-->|<!\[CDATA\[.*?\]\]>|<\?.*?\?>|(?P<doctype>"+_LEGACY_XHTML+
+               rb")|&(?P<entity>[A-Za-z][A-Za-z0-9]+);")
+_XML_BUILTINS = {"amp","lt","gt","apos","quot"}
+
+
+def normalize_epub_xml(data):
+    # Work in the original encoding and leave literal content alone.
+    if not any(token in data for token in (b"&",b"<!DOCTYPE",b"\x00")):
+        return data
+    encoding=None
+    if data.startswith((b"\xfe\xff",b"\x00<")):encoding="utf-16-be"
+    elif data.startswith((b"\xff\xfe",b"<\x00")):encoding="utf-16-le"
+    source=data.decode(encoding) if encoding else data
+    def substitute(match):
+        entity=match["entity"]
+        if entity:
+            name=entity if encoding else entity.decode("ascii")
+            value=html5.get(name+";") if name not in _XML_BUILTINS else None
+            if value:
+                replacement="".join(f"&#{ord(char)};" for char in value)
+                return replacement if encoding else replacement.encode("ascii")
+        if match["doctype"]:return "" if encoding else b""
+        return match[0]
+    normalized=re.sub(_XML_TOKENS.decode() if encoding else _XML_TOKENS,substitute,source,flags=re.S)
+    return normalized.encode(encoding) if encoding else normalized
+
+
 def xml(folder, name):
     with linked_media.member(folder,name,resource(folder,name)) as (stream,size):
         if size > 24 * 1024**2:
             raise ValueError("Ein Textabschnitt überschreitet 24 MB.")
-        return ET.parse(stream).getroot()
+        original=stream.read()
+    normalized=normalize_epub_xml(original)
+    root=ET.fromstring(normalized)
+    if original!=normalized:
+        target=linked_media.repaired_member(folder,name)
+        target.parent.mkdir(exist_ok=True)
+        target.write_bytes(normalized)
+    return root
 
 
 def local(node):

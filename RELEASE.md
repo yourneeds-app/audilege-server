@@ -1,7 +1,7 @@
 ## Deutsch
 
-Audilege beendet unterbrochene Audio- und EPUB-Übertragungen, ohne nach einem Schreib-Timeout eine zweite HTTP-Antwort auf derselben Verbindung zu senden.
+Audilege liest ältere EPUBs mit HTML-Zeichenreferenzen wie `&nbsp;` ein. Reader und Downloads verwenden kompatible XHTML-Kopien, während die Quelldateien erhalten bleiben.
 
 ## English
 
-Audilege closes interrupted audio and EPUB transfers without sending a second HTTP response on the same connection after a write timeout.
+Audilege imports older EPUBs with HTML character references such as `&nbsp;`. Readers and downloads use compatible XHTML copies and preserve the original files.

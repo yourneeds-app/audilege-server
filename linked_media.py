@@ -1,8 +1,10 @@
 """Read-only references to a server-side collection, including EPUB members."""
 from contextlib import contextmanager
+from hashlib import sha256
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import shutil
 import zipfile
 
 
@@ -41,9 +43,19 @@ def track_path(folder, name, fallback):
     return fallback
 
 
+def repaired_member(folder,name):
+    return folder/"epub-xml"/sha256(name.encode()).hexdigest()
+
+
 @contextmanager
 def member(folder, name, fallback):
     link = reference(folder)
+    repaired=repaired_member(folder,name)
+    if repaired.is_file():
+        if "epub" in link:source_path(link,link["epub"])
+        with repaired.open("rb") as stream:
+            yield stream,repaired.stat().st_size
+        return
     if "epub" in link:
         with zipfile.ZipFile(source_path(link, link["epub"])) as archive:
             info = archive.getinfo(name)
@@ -58,17 +70,23 @@ def member(folder, name, fallback):
 @contextmanager
 def downloadable(folder):
     link = reference(folder)
-    if "tracks" not in link:
-        yield original_epub(folder)
+    original=original_epub(folder) if "tracks" not in link else folder/"book.epub"
+    if "tracks" not in link and not (folder/"epub-xml").is_dir():
+        yield original
         return
     # Offline clients explicitly request a self-contained EPUB. Build it only for this download.
     with TemporaryDirectory(prefix="audilege-download-") as temp:
         target = Path(temp) / "audio.epub"
-        with zipfile.ZipFile(folder/"book.epub") as skeleton, zipfile.ZipFile(target, "w") as output:
+        with zipfile.ZipFile(original) as skeleton, zipfile.ZipFile(target, "w") as output:
             for item in skeleton.infolist():
-                if item.filename in link["tracks"]:
+                if item.filename in link.get("tracks",{}):
                     output.write(source_path(link, link["tracks"][item.filename]), item.filename)
                 else:
-                    output.writestr(item, skeleton.read(item))
+                    repaired=repaired_member(folder,item.filename)
+                    if repaired.is_file():
+                        output.writestr(item,repaired.read_bytes())
+                    else:
+                        with skeleton.open(item) as src, output.open(item,"w",force_zip64=item.file_size>=zipfile.ZIP64_LIMIT) as dest:
+                            shutil.copyfileobj(src,dest,256*1024)
         yield target
 
