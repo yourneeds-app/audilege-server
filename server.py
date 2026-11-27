@@ -348,17 +348,27 @@ class Handler(BaseHTTPRequestHandler):
             if not m or not any(m.groups()) or not 0<=start<=end<size:
                 return self.output({},416,[("Content-Range",f"bytes */{size}")])
             headers += [("Content-Range",f"bytes {start}-{end}/{size}")]
-        self.respond(206 if ranges else 200,mime,end-start+1,headers)
-        if self.command!="HEAD":
-            if end>=start:
-                f.seek(start)
-                remaining=end-start+1
-                while remaining:
-                    chunk=f.read(min(remaining,256*1024))
-                    if not chunk:
-                        break
-                    self.wfile.write(chunk)
-                    remaining-=len(chunk)
+        try:
+            self.respond(206 if ranges else 200,mime,end-start+1,headers)
+        except (TimeoutError,ConnectionError):
+            self.close_connection=True
+            return
+        if self.command=="HEAD" or end<start:return
+        f.seek(start)
+        remaining=end-start+1
+        while remaining:
+            chunk=f.read(min(remaining,256*1024))
+            if not chunk:
+                self.close_connection=True
+                return
+            try:
+                self.wfile.write(chunk)
+            except (TimeoutError,ConnectionError):
+                # The response already started. Let the client see the short
+                # body and close the socket without writing a second response.
+                self.close_connection=True
+                return
+            remaining-=len(chunk)
 
     def artwork(self,source,mime,small,versioned=False):
         import io

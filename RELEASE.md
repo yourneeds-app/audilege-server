@@ -1,7 +1,7 @@
 ## Deutsch
 
-Gehörte Podcastfolgen zeigen einen Haken. „Podcast A–Z“ ordnet Folgen nach der Sendung. „Serie fortsetzen“ zeigt auf der Startseite den laufenden oder nächsten Band mit gestapelten Covern.
+Audilege beendet unterbrochene Audio- und EPUB-Übertragungen, ohne nach einem Schreib-Timeout eine zweite HTTP-Antwort auf derselben Verbindung zu senden.
 
 ## English
 
-Completed podcast episodes show a check mark. Podcast A–Z sorts episodes by show. Continue series on Home shows the current or next volume with stacked covers.
+Audilege closes interrupted audio and EPUB transfers without sending a second HTTP response on the same connection after a write timeout.

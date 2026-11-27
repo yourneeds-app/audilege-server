@@ -8,6 +8,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import Mock
 from urllib.error import HTTPError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -32,6 +33,29 @@ def epub(audio=False):
             z.writestr("a.smil",'<smil><body><par><text src="a.xhtml#w"/><audio src="a.mp3" clipBegin="1s" clipEnd="2s"/></par></body></smil>')
             z.writestr("a.mp3",b"synthetic-range-fixture")
     return buf.getvalue()
+
+
+class StreamTest(unittest.TestCase):
+    def test_socket_timeout_closes_stream_without_second_response(self):
+        for fail_at_headers in (False,True):
+            with self.subTest(fail_at_headers=fail_at_headers):
+                handler=object.__new__(Handler)
+                handler.command="GET"
+                handler.headers={"Range":"bytes=1-3"}
+                handler.close_connection=False
+                handler.respond=Mock(side_effect=TimeoutError if fail_at_headers else None)
+                handler.wfile=Mock()
+                handler.wfile.write.side_effect=TimeoutError
+                handler.output=Mock()
+                handler.route=lambda:handler.stream_open(io.BytesIO(b"test"),4,"audio/mpeg")
+                handler.handle_api()
+                self.assertTrue(handler.close_connection)
+                handler.respond.assert_called_once_with(206,"audio/mpeg",3,[
+                    ("Accept-Ranges","bytes"),("Content-Security-Policy","sandbox; default-src 'none'"),
+                    ("Content-Range","bytes 1-3/4")])
+                handler.output.assert_not_called()
+                if fail_at_headers:handler.wfile.write.assert_not_called()
+                else:handler.wfile.write.assert_called_once_with(b"est")
 
 
 class ServerTest(unittest.TestCase):
